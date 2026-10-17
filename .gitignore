@@ -1,0 +1,15 @@
+# Runtime files that are never committed
+ops/.lock
+ops/secrets.local
+ops/inbox_pending
+ops/agents.json
+ops/run.json
+ops/runs/*.log
+ops/runs/*.log.*
+ops/queue/done/
+.DS_Store
+DerivedData/
+*.xcuserstate
+__pycache__/
+ops/runs/*.jsonl
+ops/.auth_alerted
