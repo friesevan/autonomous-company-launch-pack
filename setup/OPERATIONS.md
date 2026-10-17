@@ -265,6 +265,7 @@ rules/worker-rules.md      The one-page rulebook built into every worker (Invest
 rules/lookup.py            Prints one Commandment, section, or search result (Investors edit only)
 rules/build_agents.py      Assembles personas + rules + amendments into ops/agents.json (Investors edit only)
 rules/hooks/               protect-records.sh (every shell command) and model-guard.py (every worker call) (Investors edit only)
+setup/APPLE.md             Setting Up Apple Developer Account (Investors edit only)
 setup/INVESTORS.md         The Setup Guide (Investors edit only)
 setup/OPERATIONS.md        This guide (Investors edit only)
 investors/allowlist.md     GitHub usernames whose messages count (Investors edit only)

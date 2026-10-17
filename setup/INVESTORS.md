@@ -10,12 +10,12 @@ Everything in this guide needs a human: a password, a payment, an identity check
 4. The Mac mini is set up (sections 1 to 3).
 5. GitHub is set up and both of your usernames are in `investors/allowlist.md` (section 4).
 
-Start the Apple steps first. Individual enrollment usually takes a day or two, but identity verification can stretch to weeks. Setup time on Day 1 counts toward the 30 days, so nothing should be waiting on Apple once the first prompt runs.
+Start the Apple steps first (`setup/APPLE.md`). Individual enrollment usually takes a day or two, but identity verification can stretch to weeks. Setup time on Day 1 counts toward the 30 days, so nothing should be waiting on Apple once the first prompt runs.
 
 ## 1. Hardware
 
 - [ ] **Mac mini (M1, 16 GB memory, 256 GB storage)**, used, about $320. The research behind this choice is in the appendix of the Launch Pack. Buy from a seller with returns; check the listing says 16 GB; confirm Activation Lock is off and the Mac isn't enrolled in a company's device management when it arrives; erase it and reinstall macOS before setup.
-- [ ] **An external SSD (1 TB, about $75–130)** for Time Machine backups, and as overflow storage if Xcode fills the internal disk.
+- [ ] Optional: **an external drive** for Time Machine backups. It isn't required. The company pushes everything that matters to GitHub after every run, so a dead disk costs a reinstall from this guide, not the company's work. And the 256 GB internal disk has room for macOS, Xcode, one iOS Simulator runtime, and a small app: about 70 to 100 GB in use. If you have a spare drive of 256 GB or more, use it; don't buy one for this.
 - [ ] **Wired Ethernet** if you can. Wi-Fi works.
 - [ ] A keyboard, mouse, and display for the setup day. After that the Mac can run with nothing attached.
 - [ ] Optional: a small UPS (battery backup). With FileVault on, a power cut leaves the Mac waiting at the password screen until one of you types it (section 2).
@@ -29,20 +29,20 @@ Create and use one account for the company. Only you two know its password.
 - [ ] **Privacy & Security > FileVault:** turn on. **Firewall:** turn on.
 - [ ] **Energy:** turn on "Start up automatically after a power failure" and "Prevent automatic sleeping when the display is off". **Lock Screen:** never start the screen saver; never turn the display off on power adapter.
 - [ ] **General > Sharing:** turn on **Screen Sharing** and **Remote Login** (SSH), so you can reach the Mac from your own computers. Allow access for the company account only.
-- [ ] **Time Machine:** back up to the external SSD, automatically.
+- [ ] **Time Machine**, if you have an external drive: back up to it, automatically.
 - [ ] Know the FileVault caveat: after a power cut, the Mac waits at the FileVault screen and Screen Sharing won't work until someone types the password at the keyboard. Nothing can alert you while it waits there, so a missing report is the sign. The company reports an unexpected stop as soon as it is running again.
 
 ## 3. Software
 
 Open Terminal in the company account and run these one at a time.
 
-- [ ] **Xcode.** Install from the Mac App Store, open it once, accept the license, and let it install its components. Then, in Terminal:
+- [ ] **Xcode.** Install it from the Mac App Store, signed in to the App Store only (not iCloud) with the developer Apple Account (`setup/APPLE.md`), or download it from developer.apple.com/download. Leave the Mac signed out of iCloud. Open Xcode once, accept the license, and let it install its components. Then, in Terminal:
 
   ```bash
   xcode-select --install
   ```
 
-  In Xcode, open **Settings > Components** and install the **iOS** platform and the current iOS Simulator runtime.
+  In Xcode, open **Settings > Components** and install the **iOS** platform and the current iOS Simulator runtime (one runtime is enough).
 
 - [ ] **Homebrew**, then the command-line tools the company uses:
 
@@ -73,17 +73,7 @@ Open Terminal in the company account and run these one at a time.
 
 ### Apple
 
-- [ ] **Decide which Investor enrolls.** With no LLC, the developer membership is that person's own: their legal name, their contract with Apple, their tax forms and bank account. Treat the choice as permanent; Apple moves an individual membership to another person only rarely, with its own help. Agree in writing between you how costs and proceeds are split, since Apple pays only the enrolling Investor.
-- [ ] **Developer Apple Account, in that Investor's name.** Create a new Apple Account for the experiment at account.apple.com with the business email address (below), the enrolling Investor's legal first and last name (a company name in those fields delays approval), and two-factor codes to their phone. A dedicated account keeps their personal iCloud off the Mac mini. Their existing personal Apple Account would also work, but it would then be signed in on the company's machine.
-- [ ] **Apple Developer Program ($99/year), as an individual.** Enroll at developer.apple.com/programs/enroll. There is no LLC, so the enrolling Investor's legal name appears as the seller on the App Store; the company's chosen name still appears inside the app and on its site. Make sure the Apple Account's name, region, and phone number match the government ID you'll verify with. An individual can't use a trade name as the seller. Expect anywhere from a day to several weeks.
-- [ ] **App Store Connect agreements.** Once the membership is active, sign in to appstoreconnect.apple.com as the Account Holder, open **Business** (or **Agreements, Tax, and Banking**), accept the **Paid Apps Agreement**, and complete the tax forms and banking details. Nothing can be sold until these show as active.
-- [ ] **EU trader status.** App Store Connect asks every developer to declare whether they are a "trader" under the EU Digital Services Act, and selling a paid app or in-app purchases points to yes. A trader's address (or a P.O. box), phone number, and email are shown on the app's EU product pages. Use the business email, a phone number you don't mind being public, and a P.O. box if you'd rather not show a home address (a P.O. box needs a receipt or bill as proof). Apple's page on this isn't legal advice, and neither is this.
-- [ ] **Small Business Program.** Enroll at developer.apple.com/app-store/small-business-program/enroll as the Account Holder. New developers qualify. The 15% rate starts 15 days after the end of the Apple fiscal month in which you're approved, so month one will most likely be at 30%.
-- [ ] **App Store Connect API key.** In App Store Connect, **Users and Access > Integrations > App Store Connect API**: generate a key with the **App Manager** role. Download the `.p8` file (it's offered once). On the Mac mini, place it at `~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8` in the company account, and store the Key ID and Issuer ID in the Keychain or in `ops/secrets.local` (ignored by git). This lets the company upload builds and read sales without two-factor prompts.
-- [ ] **Xcode sign-in.** In Xcode, **Settings > Accounts**, add the developer Apple Account so builds are signed automatically. This asks for a two-factor code once.
-- [ ] **The other Investor** as an App Store Connect user with the **App Manager** role (**Users and Access > Users**), so both of you can be internal TestFlight testers. An individual membership can add up to 50 such users; they get App Store Connect access, not membership in the developer team, which is all TestFlight and sales reports need.
-- [ ] **TestFlight** on both of your iPhones. Internal testers (members of the App Store Connect team, up to 100) get builds within minutes of upload with no Beta App Review. Builds expire after 90 days.
-- [ ] **Later, if it earns enough for an LLC.** Nothing to do now; this is how the Apple side would move. Form the LLC, get its free D-U-N-S Number, then ask Apple to update the membership from individual to organization (developer.apple.com/contact/request/migrate-individual-account). The enrolling Investor must be a founder or cofounder of the LLC, Apple may ask for business documents, and reported waits run from a day to months. Apple's help page doesn't say what happens to existing apps, so confirm with Apple Developer Support first. The fallback is to enroll the LLC separately and transfer the app to it: the app keeps its ratings, reviews, and bundle ID, and users keep getting updates, while sales history from before the transfer stays with the old account.
+- [ ] Follow **Setting Up Apple Developer Account** (`setup/APPLE.md`): who owns the membership, which Apple Account goes where (including on the Mac mini), and the step-by-step checklist through TestFlight. Start it before anything else in this guide.
 
 ### GitHub
 

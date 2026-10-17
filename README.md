@@ -44,11 +44,12 @@ Day 1 does not start until all five are true. Setup time on Day 1 counts toward 
 
 ## Reading order
 
-1. `setup/INVESTORS.md`: the Setup Guide. Do it in order.
-2. `CLAUDE.md`: the Commandments, the rules the company lives by. Read them once in full.
-3. `setup/OPERATIONS.md`: how the company runs itself. Read it to know what to expect; the company builds it.
-4. `rules/worker-rules.md`: the one-page rulebook every worker carries.
-5. `ops/prompts/day1.md`: the first prompt. You paste it into Claude Code once.
+1. `setup/APPLE.md`: Setting Up Apple Developer Account. Start it first; Apple's identity check is the longest wait.
+2. `setup/INVESTORS.md`: the Setup Guide. Do it in order.
+3. `CLAUDE.md`: the Commandments, the rules the company lives by. Read them once in full.
+4. `setup/OPERATIONS.md`: how the company runs itself. Read it to know what to expect; the company builds it.
+5. `rules/worker-rules.md`: the one-page rulebook every worker carries.
+6. `ops/prompts/day1.md`: the first prompt. You paste it into Claude Code once.
 
 ## The files
 
@@ -62,6 +63,7 @@ Day 1 does not start until all five are true. Setup time on Day 1 counts toward 
 | `rules/build_agents.py` | Combines each worker's persona with the worker rules and amendments before every run | Investors |
 | `rules/hooks/protect-records.sh` | Blocks deleting or moving logs, story, reports, and the Investors' files | Investors |
 | `rules/hooks/model-guard.py` | Refuses Fable once its weekly allowance is used, and keeps diaries and small talk on Haiku | Investors |
+| `setup/APPLE.md` | Setting Up Apple Developer Account: who owns it, which Apple Account goes where, the steps | Investors |
 | `setup/INVESTORS.md` | The Setup Guide | Investors |
 | `setup/OPERATIONS.md` | The Operations Guide | Investors |
 | `investors/allowlist.md` | GitHub usernames whose messages count as instructions | Investors |
