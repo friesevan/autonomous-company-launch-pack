@@ -245,7 +245,8 @@ def revenue_chart(history, goal, days_total=30, day1=None, width=640, height=220
     out.append(f'<line x1="{L}" y1="{y(goal):.1f}" x2="{width - R}" y2="{y(goal):.1f}" stroke="var(--accent)" stroke-dasharray="4 4" opacity=".7"/>')
     out.append(f'<text x="{width - R}" y="{y(goal) - 5:.1f}" text-anchor="end" class="lbl">goal ${goal:,.0f}</text>')
     for d in (1, 10, 20, days_total):
-        out.append(f'<text x="{x(d):.1f}" y="{height - 8}" text-anchor="middle" class="lbl">Day {d}</text>')
+        anchor = "start" if d == 1 else "end" if d == days_total else "middle"
+        out.append(f'<text x="{x(d):.1f}" y="{height - 8}" text-anchor="{anchor}" class="lbl">Day {d}</text>')
     for v in (0, goal / 2, goal):
         out.append(f'<text x="{L - 6}" y="{y(v) + 4:.1f}" text-anchor="end" class="lbl">${v:,.0f}</text>')
     out.append(f'<line x1="{L}" y1="{y(0):.1f}" x2="{width - R}" y2="{y(0):.1f}" stroke="var(--line)"/>')
