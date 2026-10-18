@@ -11,7 +11,7 @@ What it reads (the data contract; the Handbook may not change these shapes):
   site.json                 company name, tagline, repo, site URL, options
   reports/*.md              the public report, without its questions; front matter: title, number, day, date, time, kind, issue
   story/*.md                front matter: title, date, time, kind, workers (comma list)
-  personnel/registry.json   [{name, role, manager, status, salary, career_goal, joined, left, bio}]
+  personnel/registry.json   [{name, role, manager, status (active|candidate|former), salary, career_goal, joined, left, bio}]
   personnel/portraits/*.svg one per worker
   .claude/agent-memory/<name>/MEMORY.md   what each worker remembers (published if publish_memory)
   log/events.jsonl          {time, worker, type, summary, link}
@@ -203,7 +203,8 @@ def load_workers():
         w["slug"] = slugify(w["name"])
         w.setdefault("status", "active")
         out.append(w)
-    out.sort(key=lambda w: (w["status"] != "active", w.get("joined", ""), w["name"]))
+    rank = {"active": 0, "candidate": 1, "former": 2}
+    out.sort(key=lambda w: (rank.get(w["status"], 3), w.get("joined", ""), w["name"]))
     return out
 
 
@@ -422,8 +423,8 @@ def build(out, use_gh=True):
     cast = [fm({"layout": "default", "title": "Cast"}), "# The cast", "",
             "Every worker is an AI-simulated character with a first name, a role, a personality, and a career goal. "
             "Portraits are drawn by code from a mathematical expression seeded by the name.", ""]
-    for status, label in (("active", "Working here now"), ("former", "Former workers")):
-        group = [w for w in workers if (w["status"] == "active") == (status == "active")]
+    for status, label in (("active", "Working here now"), ("candidate", "Considered, not hired"), ("former", "Former workers")):
+        group = [w for w in workers if w["status"] == status or (status == "former" and w["status"] not in ("active", "candidate"))]
         if not group:
             continue
         cast += [f"## {label}", "", '<div class="cast">']
@@ -503,8 +504,8 @@ def build(out, use_gh=True):
     if shares:
         up += ["## Last 7 days, by category", "", "| Category | Share | Cap |", "| --- | --- | --- |"]
         caps = usage.get("caps") or {}
-        for c in ("project", "reports", "meetings", "talk"):
-            up.append(f"| {c} | {shares.get(c, 0):.1%} | {('%.0f%%' % (caps[c] * 100)) if c in caps else 'at least 90%'} |")
+        for c in ("project", "reports", "meetings", "hiring", "talk"):
+            up.append(f"| {c} | {shares.get(c, 0):.1%} | {('%.0f%%' % (caps[c] * 100)) if c in caps else 'at least 87%'} |")
         up.append("")
     if usage.get("weeks"):
         up += ["## Past weeks", "", "| Week of | Spent | Budget | Fable | Limit hit |", "| --- | --- | --- | --- | --- |"]

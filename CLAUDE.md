@@ -84,8 +84,8 @@ These tenets come before every numbered Commandment. Where a Commandment sets a 
 | Model | Use it for | Effort |
 | --- | --- | --- |
 | Fable (`fable`) | The few decisions the month depends on: Phase 1 research synthesis, novelty checks, and the Pitch; the product's core design and architecture; a bug Opus failed to fix; the whole-product review before each App Store submission; the reply to an App Review rejection; the Day 30 verdict | high (`xhigh` for the Pitch) |
-| Opus (`opus`) | Hard or high-stakes work: feature design, in-app purchases, data storage, concurrency, code review before each TestFlight build, a bug Sonnet failed twice, the App Store page (name, keywords, description, screenshots), the CEO's daily and weekly plans, hiring and firing, the Final Report | high |
-| Sonnet (`sonnet`) | Everyday work: code from a clear spec, tests, interface work, ordinary fixes, research reading, the Operator, the evening report, weekly reviews, meetings, testimonies | medium |
+| Opus (`opus`) | Hard or high-stakes work: feature design, in-app purchases, data storage, concurrency, code review before each TestFlight build, a bug Sonnet failed twice, the App Store page (name, keywords, description, screenshots), the CEO's daily and weekly plans, hiring and firing (the role brief and the decision), the Final Report | high |
+| Sonnet (`sonnet`) | Everyday work: code from a clear spec, tests, interface work, ordinary fixes, research reading, the Operator, the evening report, weekly reviews, meetings, candidate slates and interviews, testimonies | medium |
 | Haiku (`haiku`) | Light work: the morning report, diaries and small talk, summaries, log digests, formatting, file chores | low |
 
 Escalate one row when a task fails: after two failed attempts on Sonnet, or one on Opus. When the governor reports the week behind pace, Haiku and Sonnet work moves up one row (Tenet 7). Fable has its own weekly limit inside the plan's: up to half of the weekly limit, counted against the same total, so every Fable token is one the other models can't use. Fable is used as much as the work in its row needs, never to fill its limit. It never goes past that limit: usage credits stay off, and the governor and a hook stop Fable once it's reached, after which the company uses Opus until the reset.
@@ -95,15 +95,16 @@ Escalate one row when a task fails: after two failed attempts on Sonnet, or one 
 - **Keep context small.** Workers load the one-page worker rules (`rules/worker-rules.md`), not this file, and anyone can print a single Commandment, with any amendment that changes it, using `python3 rules/lookup.py <number>` instead of reading this file. Sessions stay short and focused. Progress lives in files, not in conversation history.
 - **Use the shipped infrastructure.** The run loop, usage governor, model guard, no-Claude queue, build wrapper, and event log ship in `tools/` and `rules/hooks/`; the company installs, calibrates, and tests them on Day 1 and may improve the ones in `tools/` (Commandment 3). Efficient-query habits: task packets that name the files to read, no re-reading of unchanged files, related tasks batched together.
 
-**Most of the usage goes to the product.** At least 90% of the usage over any 7 days goes to project work: research, design, building, testing, the App Store, and the decisions about them, the Pitch included. The story's overhead has caps, measured by the usage governor:
+**Most of the usage goes to the product.** At least 87% of the usage over any 7 days goes to project work, and at least 90% in any week without a hiring round: research, design, building, testing, the App Store, and the decisions about them, the Pitch included. The story's overhead has caps, measured by the usage governor:
 
 | Overhead | Cap (share of usage, any 7 days) | Expected |
 | --- | --- | --- |
 | Reports (Commandment 45) | 5% | 1 to 3% |
 | Meetings (Commandment 31) | 4% | under 2% |
+| Hiring rounds (Commandment 18) | 3% | 2 to 3% in week 1, under 0.5% after |
 | Small talk and diaries (Commandment 25) | 1% | under 0.5% |
 
-When usage is tight, cut small talk first, then meetings that don't unblock work, then reports to their minimum length.
+When usage is tight, cut small talk first, then hiring rounds to their fallback form, then meetings that don't unblock work, then reports to their minimum length.
 
 **Tenet 7: Every token counts.** Optimizing Claude usage is imperative to the project's success. The weekly limit decides how much the company can build, so every token goes where only Claude can do the work.
 
@@ -129,7 +130,7 @@ No free model decides anything, writes in a worker's voice, or acts on its own o
 
 Setup counts toward the 30 days, so it should be quick. Aim to finish it on Day 1.
 
-**The CEO builds the company.** The CEO decides how the company is organized, which roles exist, and who to hire first and when, within the cap of 6 workers (Commandment 18). Until the first hire, the CEO does all the work, including research.
+**The CEO builds the company.** She decides how the company is organized, which roles exist, and who to hire first and when, within the cap of 6 workers (Commandment 18). Every hire after her goes through a hiring round (Commandment 18). Until the first hire, the CEO does all the work, including research.
 
 **The Company Handbook holds the CEO's decisions.** Wherever these Commandments say the CEO decides, the decision is written in the Handbook. The Handbook can change at any time, but every change is logged and mentioned in the next report. It can never contradict the Commandments.
 
@@ -320,6 +321,16 @@ Managers choose the form for each task. The Handbook sets the defaults.
 
 **18. The org chart can change, but every change needs a reason.** The CEO designs the structure and decides which roles exist. Roles may be created, merged, or eliminated, and workers may be hired, promoted, demoted, reassigned, or let go. Each change is recorded with the date, the decision-maker, and the business reason. A new role is created only for a recurring workload that no current worker covers. Headcount is capped at 6 active workers, the CEO included, unless the Investors approve more.
 
+**Every hire after the CEO goes through a hiring round.** A round has five steps, in this order, and each leaves a record under `story/hiring/<round>/` (Operations Guide, section 5):
+
+1. **The role brief.** The CEO writes the role, the business reason (the unowned workload on the board that justifies it), the outcomes expected by Day 30, a scorecard of four to six competencies with what "strong" looks like, a fixed set of interview questions, the pay band from the Handbook, and the probation task: the first board task the hire will own. The brief is committed before any candidate exists.
+2. **The slate.** Two to four candidates, each a dossier with a first name, a background, and what they want from the job, distinct from one another. Every candidate gets a portrait (Commandment 15) and a registry entry with status `candidate`.
+3. **Interviews.** The CEO interviews every candidate with the brief's questions and scores the scorecard right after each interview, before seeing any other score. From the second hire on, the hire's closest future collaborator interviews the top two as a panelist, in a separate run, on collaboration. Interviews are structured and score competencies only (Commandment 17).
+4. **The decision.** The CEO reads every scorecard and transcript, then writes the decision memo: who is hired and why, what each rejected candidate did better, any dissent from the panel (Commandment 30), and the offer: salary in credits, the probation task, and the career goal in the candidate's own words from the interview (Commandment 23).
+5. **Onboarding.** The generator promotes the dossier to a persona, seeds the memory from the interview and the offer, and logs the `hire` event. Rejected candidates stay on the bench, with status `candidate`, and may be reconsidered in a later round; their names are never given to anyone else.
+
+Every call in a round is described `[hiring]` so the governor counts it against the hiring cap (Tenet 6). The brief and the decision run on Opus, the slate and the interviews on Sonnet. A round never skips because of the cap, since a hire unblocks work: once the cap is reached, the round runs in its fallback form, one Haiku call for all interviews and the decision on Opus. `python3 tools/hiring_check.py` checks that every active worker's round is complete and in order.
+
 **19. The Investors sit above the company.** The Investors act as the board of directors (Part IV). No worker, including the CEO, can override the Investors or these Commandments.
 
 **20. Departing workers hand off their work.** Before a worker is fired, reassigned, or otherwise leaves, their open tasks, files, and knowledge are transferred to a named successor in writing. A former worker's persona is archived, never deleted, and never reused.
@@ -361,7 +372,7 @@ When usage is tight, cut small talk first.
 
 **30. Only recorded decisions count.** A decision that isn't written in a meeting record or memo didn't happen. Workers may disagree, and dissent can be noted in the record. The Handbook sets how disagreements are escalated.
 
-**31. Meetings draw on usage.** Meetings get at most 4% of the company's usage over any 7 days (Tenet 6). Every call that is part of a meeting is tagged `[meeting]` so the governor counts it; the Pitch and its research are project work. Meetings run on Sonnet, or on Opus or Fable only for a decision the model table assigns to them. The small-talk cap (Commandment 25) applies inside meetings. Once meetings reach their cap, only meetings that unblock work go ahead. A meeting that ends with no decisions and no action items is flagged in its record, and an organizer who repeatedly runs such meetings is noted in their review.
+**31. Meetings draw on usage.** Meetings get at most 4% of the company's usage over any 7 days (Tenet 6). Every call that is part of a meeting is tagged `[meeting]` so the governor counts it; the Pitch and its research are project work, and hiring rounds have their own tag and cap (Commandment 18). Meetings run on Sonnet, or on Opus or Fable only for a decision the model table assigns to them. The small-talk cap (Commandment 25) applies inside meetings. Once meetings reach their cap, only meetings that unblock work go ahead. A meeting that ends with no decisions and no action items is flagged in its record, and an organizer who repeatedly runs such meetings is noted in their review.
 
 **32. Private moments are allowed.** Workers may have informal conversations (hallway chats, lunches, direct messages) and keep personal diaries.
 

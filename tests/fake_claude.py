@@ -63,6 +63,11 @@ out({"type": "assistant", "parent_tool_use_id": None, "message": {**m2, "content
      "input": {"subagent_type": "maya", "description": "[diary] Maya", "model": "haiku", "prompt": "..."}}]}})
 out({"type": "assistant", "parent_tool_use_id": "t_diary", "message": {"id": "w3", "model": "claude-haiku-5-5",
      "content": [{"type": "text", "text": "dear diary"}], "usage": usage(3, 400, 10000, 7000)}})
+# A hiring-round interview (Commandment 18) counts to its own category.
+out({"type": "assistant", "parent_tool_use_id": None, "message": {**m2, "content": [{"type": "tool_use", "id": "t_hire", "name": "Agent",
+     "input": {"subagent_type": "ceo", "description": "[hiring] interview Noor", "model": "sonnet", "prompt": "..."}}]}})
+out({"type": "assistant", "parent_tool_use_id": "t_hire", "message": {"id": "w4", "model": "claude-sonnet-5-5",
+     "content": [{"type": "text", "text": "transcript"}], "usage": usage(3, 600, 10000, 6000)}})
 result = {"type": "result", "subtype": "success", "is_error": False,
           "result": "Done. We stayed well under the usage limit today." if mode == "normal_mentions_limit" else "Done.",
           "num_turns": 6, "duration_ms": 1000, "permission_denials": [],

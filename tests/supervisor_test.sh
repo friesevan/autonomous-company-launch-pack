@@ -17,6 +17,8 @@ mkdir -p personnel/agents/former
 printf -- "---\ndescription: Maya, iOS engineer.\nmodel: fable\n---\n# Maya\nPersona.\n" > personnel/agents/maya.md
 printf -- "---\ndescription: CEO.\n---\n# Ceo\nPersona.\n" > personnel/agents/ceo.md
 printf -- "---\ndescription: Olga, designer.\n---\n# Olga\nLeft on Day 9.\n" > personnel/agents/former/olga.md
+mkdir -p personnel/candidates
+printf -- "---\ndescription: Noor, candidate for iOS engineer.\nround: 2026-11-02-ios-engineer\nstatus: candidate\n---\n# Noor\nDossier.\n" > personnel/candidates/noor.md
 
 echo "== work tick: stream-json accounting"
 reset
@@ -25,11 +27,13 @@ ok "work session ran with sonnet/medium" "grep -qx sonnet $FAKE_ARGS && grep -qx
 ok "stream-json + verbose + max budget passed" "grep -qx stream-json $FAKE_ARGS && grep -qx -- --verbose $FAKE_ARGS && grep -qx -- --max-budget-usd $FAKE_ARGS"
 ok "run.json carries fable_ok and over_cap" "[ \"\$(j ops/run.json 'd[\"fable_ok\"], d[\"over_cap\"], d[\"max_budget_usd\"] > 0')\" = 'True [] True' ]"
 ok "cost recorded 0.65" "[ \"\$(last \"['cost_usd']\")\" = 0.65 ]"
-ok "categories split project/meetings/talk" "python3 -c \"import json; c=json.load(open('ops/usage.json'))['runs'][-1]['cats']; assert set(c)=={'project','meetings','talk'}, c; assert abs(sum(c.values())-0.65)<1e-3\""
+ok "categories split project/meetings/hiring/talk" "python3 -c \"import json; c=json.load(open('ops/usage.json'))['runs'][-1]['cats']; assert set(c)=={'project','meetings','hiring','talk'}, c; assert abs(sum(c.values())-0.65)<1e-3\""
 ok "fable call counted as project, not meetings" "python3 -c \"import json; c=json.load(open('ops/usage.json'))['runs'][-1]['cats']; assert c['project']>c['meetings']>c['talk']\""
+ok "[hiring] interview counted as hiring, not meetings" "python3 -c \"import json; c=json.load(open('ops/usage.json'))['runs'][-1]['cats']; assert c['hiring']>0 and c['hiring']!=c['meetings'], c\""
 ok "models from modelUsage scaled to cost" "python3 -c \"import json; m=json.load(open('ops/usage.json'))['runs'][-1]['models']; assert set(m)=={'sonnet','fable','haiku'}; assert abs(sum(m.values())-0.65)<1e-3\""
 ok "result .json written beside the stream" "ls ops/runs/*-work.json >/dev/null && ls ops/runs/*-work.jsonl >/dev/null && [ \"\$(j \$(ls ops/runs/*-work.json) 'd[\"total_cost_usd\"]')\" = 0.65 ]"
 ok "workers default to sonnet, persona model ignored" "[ \"\$(j ops/agents.json 'd[\"maya\"][\"model\"], d[\"maya\"][\"effort\"], \"olga\" in d')\" = 'sonnet medium False' ]"
+ok "candidates are not workers: personnel/candidates/ is not assembled" "[ \"\$(j ops/agents.json '\"noor\" in d')\" = False ]"
 ok "jsonl is git-ignored" "git check-ignore -q \$(ls ops/runs/*.jsonl | head -1)"
 
 echo "== success text that mentions a limit is not a limit hit"
@@ -79,6 +83,9 @@ echo "== caps"
 reset
 python3 -c 'import json; u=json.load(open("ops/usage.json")); u["cats"]={"2026-11-02":{"project":18.0,"reports":0.6,"meetings":0.5,"talk":0.9}}; u["days"]={"2026-11-02":20.0}; json.dump(u,open("ops/usage.json","w"))'
 ok "talk at 4.5% is over its 1% cap; others fine" "python3 tools/governor.py decide --now 2026-11-03T10:00:00-05:00 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d[\"over_cap\"]==[\"talk\"], d[\"over_cap\"]'"
+python3 -c 'import json; u=json.load(open("ops/usage.json")); u["cats"]={"2026-11-02":{"project":18.0,"reports":0.6,"meetings":0.5,"hiring":0.9,"talk":0.0}}; u["days"]={"2026-11-02":20.0}; u["caps"]={"reports":0.05,"meetings":0.04,"talk":0.01}; json.dump(u,open("ops/usage.json","w"))'
+ok "hiring at 4.5% is over its 3% cap, even when a saved caps block predates the category" "python3 tools/governor.py decide --now 2026-11-03T10:00:00-05:00 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d[\"over_cap\"]==[\"hiring\"], d[\"over_cap\"]'"
+ok "status shows the hiring cap" "python3 tools/governor.py status --now 2026-11-03T10:00:00-05:00 | grep -q 'hiring 4.5% (cap 3%)'"
 python3 -c 'import json; u=json.load(open("ops/usage.json")); u["cats"]={"2026-11-03":{"talk":0.5}}; u["days"]={}; json.dump(u,open("ops/usage.json","w"))'
 ok "too little data: no flags" "python3 tools/governor.py decide --now 2026-11-03T10:00:00-05:00 | grep -q '\"over_cap\": \[\]'"
 
@@ -93,6 +100,7 @@ ok "diary on sonnet refused" "[ \$(hk '{\"tool_name\":\"Agent\",\"tool_input\":{
 ok "diary without a model refused" "[ \$(hk '{\"tool_name\":\"Agent\",\"tool_input\":{\"description\":\"[talk] Maya and Ceo\"}}' '{\"fable_ok\":true,\"over_cap\":[]}') = 2 ]"
 ok "diary on haiku allowed" "[ \$(hk '{\"tool_name\":\"Agent\",\"tool_input\":{\"model\":\"haiku\",\"description\":\"[Diary] Maya\"}}' '{\"fable_ok\":true,\"over_cap\":[]}') = 0 ]"
 ok "diary refused when talk is over cap" "[ \$(hk '{\"tool_name\":\"Agent\",\"tool_input\":{\"model\":\"haiku\",\"description\":\"[diary] Maya\"}}' '{\"fable_ok\":true,\"over_cap\":[\"talk\"]}') = 2 ]"
+ok "[hiring] interview on sonnet allowed" "[ \$(hk '{\"tool_name\":\"Agent\",\"tool_input\":{\"model\":\"sonnet\",\"description\":\"[hiring] interview Noor\"}}' '{\"fable_ok\":true,\"over_cap\":[]}') = 0 ]"
 ok "other tools untouched" "[ \$(hk '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\"}}' '{\"fable_ok\":false}') = 0 ]"
 rm -f ops/run.json
 ok "no run.json (interactive Day 1): allowed" "[ \$(printf '%s' '{\"tool_name\":\"Agent\",\"tool_input\":{\"model\":\"fable\"}}' | CLAUDE_PROJECT_DIR=$R $H >/dev/null 2>&1; echo \$?) = 0 ]"
