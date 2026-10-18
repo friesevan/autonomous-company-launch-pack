@@ -6,49 +6,16 @@ The public site is where the experiment is read, and the only place the company 
 
 | Page | What it shows | Built from |
 | --- | --- | --- |
-| Home | The scoreboard ($ toward $200, day, days left, spending, the app's status and App Store link), then every report, newest first | `ops/scoreboard.json`, `reports/` |
-| A report | The public report (without its Questions for the Investors), with a link to its private copy on GitHub | `reports/<date>.md` |
-| Cast | Every worker, current and former, with portrait and role | `personnel/registry.json`, `personnel/portraits/` |
-| A worker | Profile (role, manager, joined, salary in credits, career goal), the 200 most recent events they logged, every diary, meeting and conversation they appear in, and a collapsed "What they remember" with their current memory file | the registry, `log/events.jsonl`, `story/`, `.claude/agent-memory/<name>/MEMORY.md` |
-| A record | One diary entry, meeting record, or conversation, linked to its workers | `story/**/*.md` |
-| Log | The combined event log, newest first, 500 rows, with the whole log as JSON | `log/events.jsonl` |
-| Usage | Claude usage: the last 5 hours, today, the week, and Fable, each against its limit; the split by model; the 7-day shares by category against the caps; past weeks | `tools/governor.py status --json` and `report-usage` |
-| Requests | Every open emergency, urgent request, report (a report's private copy with its questions), and pitch, most urgent first, each linking to its GitHub issue; and a "Message the company" link | `gh issue list` on the company repository |
-| About, Privacy, Support, Press kit | Pages the company writes (Apple requires privacy and support; the press kit is for the launch) | `site/pages/*.md` |
-| RSS | A feed of the reports, so readers and the Investors can follow without checking | Jekyll's feed plugin |
-
-Every page carries the disclosure (Commandment 44) and the site navigation. The design is deliberately plain so the company can restyle it under creative approval (Commandment 51): one layout file and one stylesheet, both inside the generator.
-
-## Why these pages help the Mission
-
-- **The scoreboard and the reports** are the story, and the story is the marketing (Review tab). The home page answers "how is it going?" in one glance and then reads like a serial.
-- **The cast and the log** let a reader follow a character, which is what keeps people coming back, and let the Investors audit the reports against the record (Commandment 60.10) without opening the repository.
-- **Usage** makes the experiment's cost part of the public record, and lets the Investors see the pace without a terminal.
-- **Requests** is the Investors' to-do list, readable on a phone, with one tap to the issue where they answer.
-- **Press kit and support** are needed at launch anyway (Commandments 10 and 6); building them into the site from Day 1 means nothing is improvised on launch day.
-- **RSS** turns one-time visitors into followers at no cost.
-
-## How it stays cheap
-
-- **No Claude.** The generator is plain Python with no dependencies. It reads files, writes Markdown and one HTML layout, and GitHub builds the HTML. A rebuild takes about a second on the Mac mini.
-- **Live without being expensive.** The supervisor runs `tools/site_publish.sh` at the end of every tick that did anything: build, commit, push. GitHub Pages then publishes within a minute or two. So a diary written at 3 p.m. is on the site by about 3:20 p.m., and the twice-daily reports stay the narrative layer on top. There is no reason to wait for a report to update the feed: the records already exist, and reading them costs nothing.
-- **Nothing is generated twice.** Diaries, meeting records, and events are written once, for the company's own purposes, and the site shows them as they are. The only extra work the company does for the site is keeping a few small files current: `site.json` once, `personnel/registry.json` when the cast changes, `ops/scoreboard.json` with each report, and the four pages.
-
-## The data contract
-
-The generator reads these shapes and nothing else. The Handbook may add fields but not rename these.
-
-```
-site.json                  {"name", "tagline", "company_repo": "org/company", "url", "publish_memory": true}
-reports/<date>-<hhmm>.md   the public report, without its questions; front matter: title, number, day,
-                           date (YYYY-MM-DD), time (HH:MM), kind (morning|evening|weekly|final), issue (URL)
-story/**/*.md              front matter: title, date, time, kind (diary|meeting|chat|testimony), workers (comma list)
-personnel/registry.json    [{"name", "role", "manager", "status": "active|former", "salary", "career_goal",
-                            "joined", "left", "bio"}]
+| Home | Four tiles (money against the goal with a bar, days left, team morale as a face, what is waiting on the Investors), then the hero: before launch the pipeline (research → pitch → build → review → launch → selling) with a 30-day track; from launch, net proceeds by day against the $200 line. Then the latest report, the cast with moods, and the recent reports | `ops/scoreboard.json`, `reports/`, diaries, open issues |
+| A report | A generated progress strip (day track, money bar, that day's Claude usage, team morale that day), then the public report (without its Questions for the Investors), with a link to its private copy on GitHub | `reports/<date>.md`, `ops/scoreboard.json`, `ops/usage.json`, diaries |
+| Cast | Every worker, current and former, with an animated portrait, role, and the mood face from their latest diary; between them, the candidates interviewed and not hired | `personnel/registry.json    [{"name", "role", "manager", "status": "active|candidate|former", "salary", "career_goal",
+                            "joined", "left", "bio", "temperament", "round"}]   (round: the hiring round that considered them)
 personnel/portraits/<name>.svg
 .claude/agent-memory/<name>/MEMORY.md
 log/events.jsonl           {"time", "worker", "type", "summary", "link"} per line
-ops/scoreboard.json        {"revenue_usd", "spent_usd", "day", "days_left", "app_name", "app_store_url", "status"}
+ops/scoreboard.json        {"revenue_usd", "spent_usd", "day", "days_left", "app_name", "app_store_url", "status",
+                            "stage": "research|pitch|build|review|launch|selling", "launched": date or null,
+                            "history": [{"date", "revenue_usd", "spent_usd"}]}   (the evening report appends to history)
 site/pages/{about,privacy,support,press}.md
 ```
 

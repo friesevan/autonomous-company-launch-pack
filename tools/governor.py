@@ -28,11 +28,11 @@ result), which prices every model at its API rate, so one weekly figure paces
 every model at once. Calibrate weekly_budget_usd on Day 1 against the
 percentages in /usage, and again whenever a limit is hit early.
 
-Categories (Tenet 6): project, reports, meetings, talk. A session's own
+Categories (Tenet 6): project, reports, meetings, hiring, talk. A session's own
 messages count to its type (work = project; morning, evening, weekly, final =
 reports). A worker call counts to the tag that starts its Agent description:
-[meeting], [diary] or [talk], [report] or [testimony]; untagged calls count to
-the session's category.
+[meeting], [hiring], [diary] or [talk], [report] or [testimony]; untagged calls
+count to the session's category.
 
 Use it all (Tenet 7): unused usage is lost at the weekly reset, so the governor
 paces toward 100% of the weekly limit. It flags a week that is behind pace
@@ -76,8 +76,8 @@ RUN_SPECS = {
     "final": {"prompt": "evening.md", "model": "opus", "effort": "high", "max_turns": 70,
               "category": "reports", "budget_share": 1.0},
 }
-CATEGORIES = ("project", "reports", "meetings", "talk")
-TAGS = {"[meeting]": "meetings", "[diary]": "talk", "[talk]": "talk", "[report]": "reports", "[testimony]": "reports"}
+CATEGORIES = ("project", "reports", "meetings", "hiring", "talk")
+TAGS = {"[meeting]": "meetings", "[hiring]": "hiring", "[diary]": "talk", "[talk]": "talk", "[report]": "reports", "[testimony]": "reports"}
 USAGE_DEFAULTS = {
     "weekly_budget_usd": 150.0,
     "reserve_fraction": 0.10,
@@ -88,7 +88,7 @@ USAGE_DEFAULTS = {
     "week_closed_until": None,
     "weeks": [],
     "limit_hits": [],
-    "caps": {"reports": 0.05, "meetings": 0.04, "talk": 0.01},
+    "caps": {"reports": 0.05, "meetings": 0.04, "hiring": 0.03, "talk": 0.01},
     "week_anchor": None,
     "rate_limit_until": None,
     "fable_blocked_until": None,
@@ -255,9 +255,14 @@ def fable_status(usage, state, now):
             "fable_allowance_usd": round(allowance, 4), "fable_blocked_until": usage.get("fable_blocked_until") if blocked else None}
 
 
+def effective_caps(usage):
+    """Saved caps over the defaults, so a usage.json written before a category existed still caps it."""
+    return {**USAGE_DEFAULTS["caps"], **(usage.get("caps") or {})}
+
+
 def budget_signals(usage, state, now, pace):
     total, shares = category_shares(usage, now)
-    caps = usage.get("caps") or USAGE_DEFAULTS["caps"]
+    caps = effective_caps(usage)
     # Shares are noise until there is about half a day of spend to divide.
     enough = total >= 0.5 * max(pace["today_share_usd"], 1.0)
     over = [c for c, cap in caps.items() if enough and shares.get(c, 0.0) > float(cap)]
@@ -691,7 +696,7 @@ def status(args):
     out = {"now": now.isoformat(), "day": day_number(state, now), "pacing": pace, **signals,
            "window_5h_usd": round(five_h, 4), "five_hour_budget_usd": five_budget,
            "window_5h_share": round(five_h / float(five_budget), 4) if five_budget else None,
-           "caps": usage.get("caps"), "all_time_by_category_usd": {k: round(v, 2) for k, v in totals.items()},
+           "caps": effective_caps(usage), "all_time_by_category_usd": {k: round(v, 2) for k, v in totals.items()},
            "all_time_by_model_usd": {k: round(v, 2) for k, v in by_model.items()},
            "weeks": usage.get("weeks", [])[-5:], "limit_hits": usage.get("limit_hits", [])[-5:],
            "rate_limit_until": usage.get("rate_limit_until"), "auth_failed_at": usage.get("auth_failed_at"),
@@ -709,7 +714,7 @@ def status(args):
         print(f"  week of {w['start'][:10]}: spent ${w['spent_usd']:.2f} of ${w['budget_usd']:.2f}, Fable ${w['fable_spent_usd']:.2f} "
               f"of ${w['fable_budget_usd']:.2f}; limits hit: weekly {w['weekly_limit_hit']}, Fable {w['fable_limit_hit']}; "
               f"{'; '.join(w['actions']) or 'no change'}")
-    caps = usage.get("caps") or {}
+    caps = effective_caps(usage)
     print("Last 7 days by category: " + ", ".join(
         f"{c} {signals['shares_7d'].get(c, 0):.1%}" + (f" (cap {caps[c]:.0%})" if c in caps else "") for c in CATEGORIES)
         + (f"; over cap: {', '.join(signals['over_cap'])}" if signals["over_cap"] else ""))

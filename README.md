@@ -72,9 +72,10 @@ Day 1 does not start until all five are true. Setup time on Day 1 counts toward 
 | `ops/prompts/day1.md` | The first prompt | Investors |
 | `ops/prompts/work.md`, `morning.md`, `evening.md` | The fixed prompts for each session type | The company may improve |
 | `tools/supervisor.sh`, `governor.py`, `inbox_check.sh`, `quiet_night.py`, `run_queue.sh`, `events.py`, `xc.sh`, `install-launchd.sh` | The run loop and usage governor, tested and ready to install on Day 1 | The company may improve |
-| `tools/site_build.py`, `tools/site_publish.sh` | The public site generator and publisher, tested | The company may improve |
+| `tools/site_build.py`, `tools/site_publish.sh`, `tools/portrait.py` | The public site generator and publisher, and the animated portrait generator, tested | The company may improve |
+| `tools/hiring_check.py` | Checks that every hire went through a complete hiring round, in order (Commandment 18) | The company may improve |
 | `ops/launchd/` | The LaunchAgent template (every 15 minutes) | The company may improve |
-| `tests/run.sh`, `tests/*_test.sh`, stand-ins | 72 checks of the run loop, governor, and model guard, run with a stand-in `claude` and `gh` | The company may improve |
+| `tests/run.sh`, `tests/*_test.sh`, stand-ins | 121 checks of the run loop, governor, model guard, site generator, and hiring-round check, run with a stand-in `claude` and `gh` | The company may improve |
 | `.gitignore`, `ops/queue/README.md` | Housekeeping | The company may improve |
 
 The `company` repository, created from this template, starts with all of these. The company creates everything else. Every worker has a first name only.

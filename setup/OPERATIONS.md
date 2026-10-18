@@ -29,6 +29,7 @@ The loop ships in `tools/`, tested. Day 1 installs it; it is not built from scra
 | `tools/xc.sh` | Quiet `xcodebuild` wrapper |
 | `tools/install-launchd.sh` | Installs the LaunchAgent (`ops/launchd/`), no sudo |
 | `tools/site_build.py`, `tools/site_publish.sh` | Builds the public site from the records and pushes it (`setup/SITE.md`) |
+| `tools/hiring_check.py` | Verifies that every hire's round is complete and in order (section 5) |
 | `ops/prompts/work.md`, `morning.md`, `evening.md` | The fixed prompt for each session type |
 
 ### One tick
@@ -105,7 +106,7 @@ The Max plan has a rolling 5-hour window and a weekly window, shared across all 
     - **Aligned weeks.** On Day 1 the company sets the pacing week to start when the plan's weekly limit resets, as `/usage` shows it (`python3 tools/governor.py set-anchor <time>`), so "the end of the week" means the same thing to the governor and to the plan.
     - **Safe only with usage credits off.** At a limit, work pauses and the queue runs; with credits on, it would bill instead.
 - **Categories.** Every run's cost is split into project work, reports, meetings, and small talk. A session's own messages count to its type (work sessions are project work; the four report sessions are reports). A worker call counts to the tag that starts its description: `[meeting]`, `[diary]` or `[talk]`, `[report]` or `[testimony]`; untagged calls count to the session's type. The split comes from the stream-json output, where each worker message carries the id of the call that started it; if a release ever drops that field, everything counts to the session's type and the per-model totals still hold.
-- **Caps.** Over a rolling 7 days: reports 5%, meetings 4%, small talk 1% (`caps` in `ops/usage.json`). A category over its cap appears in `over_cap` in `ops/run.json`: the hook stops diaries and small talk, the Operator holds only meetings that unblock work, and the evening report keeps to 800 words.
+- **Caps.** Over a rolling 7 days: reports 5%, meetings 4%, hiring 3%, small talk 1% (`caps` in `ops/usage.json`; the defaults fill in any cap a saved file lacks). A category over its cap appears in `over_cap` in `ops/run.json`: the hook stops diaries and small talk, the Operator holds only meetings that unblock work, runs hiring rounds in their fallback form (section 5), and the evening report keeps to 800 words.
 - **A limit hit** is detected from a failed session's result text (a successful session that merely mentions a limit is ignored); the governor pauses Claude sessions for 5 hours (24 for a weekly limit) and the supervisor runs the queue instead. A Fable limit pauses only Fable. `python3 tools/governor.py mark-limit <hours>` pauses by hand.
 - **Logged out.** If a session fails with "Not logged in", the governor holds sessions for an hour, retries hourly, and the supervisor opens one `emergency` issue telling the Investors how to log in again. The next good run clears it.
 - **Never idle.** When sessions are paused or the share is spent, `tools/run_queue.sh` runs every script in `ops/queue/`: builds and tests through `tools/xc.sh`, Simulator screenshots, clearing DerivedData, site generation, anything a worker queued. Each item runs once and moves to `ops/queue/done/`; the next session reads the logs.
@@ -172,9 +173,26 @@ Not a character. Reads state and messages, dispatches tasks from `ops/board.md` 
 
 Every commit a worker's task produces is authored as that worker (`git commit --author "Maya <maya@company>"`). Every event in `log/events.jsonl` names the worker. Reviews and the narrative are built from this record.
 
-### Hiring and departure
+### Hiring
 
-The CEO writes the role, the business reason, and the new worker's persona and career goal; the generator script (`tools/new-worker.*`, built on Day 1) writes `personnel/agents/<first-name>.md`, the registry entry in `personnel/registry.json`, and the portrait, together, so the three never drift. The hire is logged (Commandment 18) and reported. On departure, the persona moves to `personnel/agents/former/` (which `build_agents.py` skips), the memory directory is archived beside it, open tasks are handed off first (Commandment 20), and neither the persona nor the name is reused.
+Every hire after the CEO goes through a hiring round (Commandment 18). The round is designed records-first: each step writes a file, the narrator and the site read those files, and `tools/hiring_check.py` verifies them. The CEO owns the round; she writes the brief before any candidate exists and reads every scorecard before writing the decision.
+
+| Step | Who and model | Call | Writes |
+| --- | --- | --- | --- |
+| 1. Role brief | CEO, `opus` high | `[hiring] brief <role>` | `story/hiring/<round>/brief.md` (kind `memo`): the unowned workload on `ops/board.md` that justifies the role, outcomes expected by Day 30, a scorecard of 4 to 6 competencies with what "strong" looks like, the fixed question set (behavioral questions plus one design question in the role's domain), the pay band from the Handbook, and the probation task from the board |
+| 2. Slate | CEO, `sonnet` medium | `[hiring] slate <role>` | 2 to 4 dossiers in `personnel/candidates/<name>.md` (persona format, front matter `round:` and `status: candidate`), distinct in background, working style, and what they want; `tools/new-worker candidate` checks each name and draws the portrait |
+| 3. Interviews | CEO, `sonnet` medium; one call per candidate, started together | `[hiring] interview <candidate>` | `story/hiring/<round>/interview-<interviewer>-<candidate>.md` (kind `interview`, `workers: <interviewer>, <candidate>`): the transcript, then a `## Scorecard` table scoring each competency, written in the same call before any other score is seen |
+| 3b. Panel (from the second hire) | the hire's closest future collaborator, `sonnet` | `[hiring] interview <candidate>` | one more interview record per finalist (top two), on collaboration, in a separate run |
+| 4. Decision | CEO, `opus` high | `[hiring] decision <role>` | `story/hiring/<round>/decision.md` (kind `meeting`): who is hired and why, what each rejected candidate did better, any panel dissent (Commandment 30), and the offer: salary in credits, the probation task, and the career goal in the candidate's own words from the interview |
+| 5. Onboarding | the Operator, no Claude | `tools/new-worker hire <name>` | moves the dossier to `personnel/agents/<name>.md`, sets the registry row to `active` with `round`, `salary`, and `career_goal`, seeds `.claude/agent-memory/<name>/MEMORY.md` from the interview and the offer, logs a `hire` event |
+
+The round id is `<YYYY-MM-DD>-<role-slug>`. Rejected candidates keep their dossier, portrait, and registry row (`status: candidate`, `round`) and appear on the site's cast page under "Considered, not hired"; a later round may interview them again, and their names are never given to anyone else. The first hire has no panel because there is no team yet. A round costs about $1.45 at the rates in section 11 (slate $0.20, three interviews $0.45, panel $0.30, decision $0.50); five hires in the month cost about $7, most of it in week 1. Every call is described `[hiring]`, so the governor counts the round against its 3% cap (Tenet 6). A round never skips because of the cap, since a hire unblocks work: when `over_cap` lists `hiring`, the Operator runs the fallback form, one `haiku` call that writes every interview and scorecard, then the decision on `opus` (about $0.60).
+
+**The generator** (`tools/new-worker.*`, built on Day 1) has three subcommands, so the dossier, the registry, the portrait, and the memory never drift: `check-name <name>` refuses a first name already used by an active or former worker or any candidate; `candidate <name> --round <id>` writes the dossier skeleton, the registry row, and the portrait; `hire <name>` does step 5. `python3 tools/hiring_check.py` (shipped) verifies every round: the brief's first commit precedes every dossier's, at least two candidates, one interview with a scorecard per candidate, a decision memo, and a career goal traceable to the interviews or the memo. It runs in `tests/run.sh` and after every round.
+
+### Departure
+
+The persona moves to `personnel/agents/former/` (which `build_agents.py` skips), the memory directory is archived beside it, open tasks are handed off first (Commandment 20), and neither the persona nor the name is reused. The bench is the first place to look for a replacement.
 
 ### Career goals and reviews
 
@@ -182,7 +200,7 @@ Every persona has a career goal (Commandment 23). The CEO's review system (Comma
 
 ### Portraits
 
-`tools/portrait.*` (built on Day 1) takes a worker's first name, hashes it into parameters, and draws a deterministic SVG from a mathematical expression (for example a superformula silhouette, a harmonograph, or a symmetric tiling with a palette derived from the hash). The same name always produces the same portrait. The script is committed; its output goes to `personnel/portraits/<first-name>.svg`. The portrait style, as a style, is proposed in the first Brief with the report page (Commandment 15).
+`tools/portrait.py` (ships) seeds a random generator with the worker's first name and draws a superformula silhouette with a palette from the same seed, so the same name always produces the same portrait; `python3 tools/portrait.py <name>` writes the still version to `personnel/portraits/<first-name>.svg`, for workers and candidates alike. The site draws the animated version itself: the motion depends on the worker's `temperament` in the registry (six words; `--list-temperaments` describes them), chosen by the CEO to match the persona, and the tempo on their latest diary mood (`setup/SITE.md`). The portrait style, as a style, is proposed in the first report with the site (Commandment 15).
 
 ### Cast size
 
@@ -197,7 +215,7 @@ The CEO sets the cadence (Commandment 27). The backend supports:
 - **Pairing.** Two workers in one run, each in their own voice, on one task.
 - **Hand-off with independent review.** Worker A does the work; worker B reviews it in a fresh run that sees only the output, not A's reasoning. The default for code: engineer, then QA.
 
-Every call that is part of a meeting starts its description with `[meeting]`, so the governor can count it against the 4% cap (Commandment 31).
+Every call that is part of a meeting starts its description with `[meeting]`, so the governor can count it against the 4% cap (Commandment 31). Hiring rounds use `[hiring]` instead and have their own 3% cap (Commandment 18); the interview records live under `story/hiring/`.
 
 **Small talk and diaries** are written in the evening narrative pass, at the start of the 6:00 p.m. session: one Haiku call per worker who worked that day (`[diary] <name>`), plus at most two short exchanges between workers whose days crossed (`[talk] <name> and <name>`), all started together. Writing them there, rather than at the end of task runs, keeps narrative tokens off Opus and Fable and makes them easy to count. Meeting records, diaries, and private chats live under `story/`.
 
@@ -290,8 +308,9 @@ ops/queue/                 Work that runs without Claude; done/ holds finished i
 tests/                     Checks for the run loop with a stand-in claude and gh: tests/run.sh
 ops/secrets.local          Key IDs only; git-ignored; never published
 personnel/agents/          One persona file per active worker; former/ for those who left
-personnel/registry.json    Role, manager, salary, career goal, status, joined, left, bio (the site reads it)
-personnel/portraits/       One SVG per worker
+personnel/candidates/      Dossiers of candidates interviewed and not hired (the bench); build_agents.py never reads it
+personnel/registry.json    Role, manager, salary, career goal, status (active, candidate, former), round, joined, left, bio (the site reads it)
+personnel/portraits/       One SVG per worker and per candidate
 handbook/                  The Company Handbook, written by the CEO
 research/  pitches/        Phase 1
 creative/approved.md       The style guide (Commandment 51)
@@ -300,7 +319,7 @@ site/pages/                about, privacy, support, press: the pages the company
 ops/scoreboard.json        Revenue, spending, day, days left, app status: the site's home page and each report's scoreboard
 app/                       The iOS app
 log/                       Operational log, events.jsonl, ledger, software, assets, optimizations (never deleted)
-story/                     Meeting records, diaries, private chats (never deleted)
+story/                     Meeting records, diaries, private chats (never deleted); hiring/<round>/ holds each round's brief, interviews, and decision
 reports/                   Report sources; published to the site repository (never deleted)
 ```
 
@@ -312,8 +331,9 @@ The Operator reports setup finished, and writes the first report, only when all 
 
 - [ ] `python3 tools/governor.py set-day1` has run, and `ops/state.md` records Day 1 and the time zone.
 - [ ] The CEO's persona (`personnel/agents/`), memory, portrait, registry entry, and career goal exist, and `python3 rules/build_agents.py` produces a valid `ops/agents.json`.
-- [ ] The generator scripts for new workers and portraits work.
-- [ ] The Company Handbook exists, including the character bible for the cast.
+- [ ] The generator script for new workers works; `python3 tools/portrait.py <name>` draws a portrait, and every registry entry has a temperament.
+- [ ] The Company Handbook exists, including the character bible for the cast and how hiring rounds work.
+- [ ] The first hiring round has run, or its role brief is written and the rest of the round is the first task on Day 2's board; `python3 tools/hiring_check.py` passes.
 - [ ] `tools/install-launchd.sh` has run, and a supervisor tick started on its own and completed a session; `ops/runs/supervisor.log` shows it.
 - [ ] `claude --version` is 2.1.293 or later (so `haiku`, `sonnet`, and `opus` mean the 5.5 models and `fable` means Fable 5.1).
 - [ ] The governor is calibrated against `/usage` (section 4): the weekly budget, the Fable budget, and the week's reset time (`set-budget`, `set-fable-budget`, `set-anchor`). `python3 tools/governor.py status` reads correctly, with costs split by category and model.
@@ -377,9 +397,10 @@ Estimates for a typical day of the build, from the same model (Claude Code's own
 | Diaries and small talk: 5 diaries, 2 exchanges | Haiku | 0.57M (8k) | $0.09 | $2.6 |
 | Meetings: one decision meeting, one routine | Sonnet, Haiku | 0.37M (11k) | $0.29 | $8.7 |
 | Weekly planning meeting (4 per month) | Sonnet, Opus | 0.53M (19k) each | | $2.9 |
-| **All of the story** | | **about 75M processed, 1.2M written** | | **about $33** |
+| Hiring round: brief, slate of 3, 3 interviews, panel, decision (about 5 in the month, most in week 1) | Opus, Sonnet | 1.1M (28k) each | | $7.3 |
+| **All of the story** | | **about 80M processed, 1.3M written** | | **about $40** |
 
-As a share of the month's usage, that is about 5% if the weekly budget really is the $150 default (reports 2.9%, meetings 1.8%, small talk 0.4%), 2% at $400 a week, and under 1% at $1,000 a week. The story's cost is nearly fixed per day, so the more the plan allows, the smaller its share. The caps in Tenet 6 (5%, 4%, 1%) sit above these estimates, so they bind only if something goes wrong, such as a meeting habit that grows or reports that run long.
+As a share of the month's usage, that is about 6% if the weekly budget really is the $150 default (reports 2.9%, meetings 1.8%, hiring 1.2%, small talk 0.4%), 2.5% at $400 a week, and about 1% at $1,000 a week. The story's cost is nearly fixed per day, so the more the plan allows, the smaller its share. The caps in Tenet 6 (5%, 4%, 3%, 1%) sit above these estimates, so they bind only if something goes wrong, such as a meeting habit that grows or reports that run long. Hiring is the exception by design: three rounds in week 1 (about $4.35) sit just under 3% of a $150 week, which is why the cap has a fallback form instead of a stop. The first weekly review compares the measured cost of `[hiring]` calls with this estimate (Tenet 7).
 
 ### Handing work to code and free models (Tenet 7)
 
@@ -405,7 +426,7 @@ Research is the most expensive reading the company ever does. Search first and f
 
 ### The event log
 
-Every worker appends one JSON line per notable event with `python3 tools/events.py add`: time, worker, type (decision, commit, build, test, sale, review, hire, departure, mood, message, report, amendment), a one-line summary, and a link. Reports, weekly reviews, the quiet-night check, and the Final Report read this log instead of the whole repository.
+Every worker appends one JSON line per notable event with `python3 tools/events.py add`: time, worker, type (decision, commit, build, test, sale, review, interview, offer, hire, departure, mood, message, report, amendment), a one-line summary, and a link. Reports, weekly reviews, the quiet-night check, and the Final Report read this log instead of the whole repository.
 
 ### Prompt caching
 
@@ -423,7 +444,7 @@ Workers carry one page of rules and look up anything else with `rules/lookup.py`
 
 | Ships in the Launch Pack, tested | Built by the company on Day 1 |
 | --- | --- |
-| The supervisor, governor, inbox check, quiet-night check, queue runner, event log, build wrapper, LaunchAgent installer | The worker generator and the portrait script |
+| The supervisor, governor, inbox check, quiet-night check, queue runner, event log, build wrapper, LaunchAgent installer, hiring-round check | The worker generator (with its candidate, hire, and check-name steps) |
 | The session prompts (`ops/prompts/`) | The Company Handbook and the character bible |
 | The permission rules, the protect-records hook, and the model guard | The site's own pages (about, privacy, support, press kit), `site.json`, the registry, and the scoreboard file |
 | The rule lookup tool and the worker assembler | |
