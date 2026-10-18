@@ -69,6 +69,7 @@ python3 tools/governor.py set-day1 2026-11-01 >/dev/null; python3 tools/governor
 
 echo "== build"
 ok "builds and reports counts" "python3 tools/site_build.py --out $OUT | grep -q 'reports 2, workers 3, events 3, story 1, requests 2'"
+ok "report permalink applies to posts only (pages keep .html)" "grep -q 'type: posts' $OUT/_config.yml && ! grep -q '^permalink' $OUT/_config.yml"
 ok "jekyll config, layout, feed" "grep -q 'jekyll-feed' $OUT/_config.yml && grep -q 'feed_meta' $OUT/_layouts/default.html"
 ok "reports are posts, newest first by filename" "[ -f $OUT/_posts/2026-11-03-2026-11-03-1800-evening.md ] && [ -f $OUT/_posts/2026-11-04-2026-11-04-0600-morning.md ]"
 ok "private copy linked from the report" "grep -q 'issues/7' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Questions for the Investors' $OUT/_posts/2026-11-03-*evening.md"

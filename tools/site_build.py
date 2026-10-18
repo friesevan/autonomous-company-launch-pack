@@ -367,12 +367,14 @@ def build(out, use_gh=True):
         f"disclosure: {json.dumps(cfg['disclosure'])}",
         "plugins: [jekyll-feed]",
         "feed: {path: feed.xml}",
-        "permalink: /reports/:title/",
         "markdown: kramdown",
+        "future: true",
         "exclude: [README.md]",
         "defaults:",
         "  - scope: {path: \"\"}",
         "    values: {layout: default}",
+        "  - scope: {path: \"\", type: posts}",
+        "    values: {permalink: \"/reports/:title/\"}",
         "",
     ]))
     site.write("_layouts/default.html", LAYOUT)
