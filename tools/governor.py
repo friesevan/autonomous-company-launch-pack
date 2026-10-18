@@ -364,8 +364,8 @@ def decide(args):
     # Reports first. They are exempt from the daily share but not from a limit hit.
     if now.hour >= 18 and state.get("last_evening_date") != today:
         kind = "final" if day == 30 else "weekly" if day in (7, 14, 21, 28) else "evening"
-        return session(kind, base, pace, usage, weekly=kind == "weekly", final=kind == "final", brief=True,
-                       reason="evening report and Daily Brief are due")
+        return session(kind, base, pace, usage, weekly=kind == "weekly", final=kind == "final",
+                       reason="evening report is due")
 
     last_evening = state.get("last_evening_at")
     morning_due = (6 <= now.hour < 12 and state.get("last_morning_date") != today
@@ -377,7 +377,7 @@ def decide(args):
             save(STATE, state)
             base["morning_skipped"] = True
         else:
-            return session("morning", base, pace, usage, weekly=False, final=False, brief=False,
+            return session("morning", base, pace, usage, weekly=False, final=False,
                            reason="morning report is due and the night was not quiet")
 
     if not pace["work_allowed"]:
@@ -392,12 +392,12 @@ def decide(args):
         if base["upgrade"] and not (last_backlog and now - parse_now(last_backlog) < dt.timedelta(minutes=BACKLOG_MINUTES)):
             state["last_backlog_at"] = now.isoformat()
             save(STATE, state)
-            return session("work", base, pace, usage, weekly=False, final=False, brief=False, backlog=True,
+            return session("work", base, pace, usage, weekly=False, final=False, backlog=True,
                            open_tasks=0, inbox_pending=False,
                            reason="the board is empty but the week is behind pace: refill it with improvements")
         return {**base, "run": "skip", "reason": "nothing to do: no open tasks, no new messages, a session ran recently"}
 
-    return session("work", base, pace, usage, weekly=False, final=False, brief=False,
+    return session("work", base, pace, usage, weekly=False, final=False,
                    open_tasks=tasks, inbox_pending=inbox, reason="work session")
 
 

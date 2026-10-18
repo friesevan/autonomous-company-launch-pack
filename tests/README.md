@@ -6,4 +6,4 @@
 tests/run.sh
 ```
 
-Run it after changing anything in `tools/`, `rules/`, or `.claude/settings.json`. A change that breaks a test either has a reason, written in `log/optimizations.md` or the Brief, or gets fixed (Commandment 3).
+Run it after changing anything in `tools/`, `rules/`, or `.claude/settings.json`. A change that breaks a test either has a reason, written in `log/optimizations.md` or noted for the Investors in the next report, or gets fixed (Commandment 3).

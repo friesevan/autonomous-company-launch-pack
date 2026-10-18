@@ -22,7 +22,7 @@ The repository is private. Its owner adds the other Investor under **Settings > 
 | When | What happens | Who |
 | --- | --- | --- |
 | Before Day 1 | The Setup Guide: hardware, macOS, software, Apple, GitHub. The gate must be fully passed. | Investors |
-| Day 1 | The company sets itself up: the CEO, the Handbook, the run loop, the channels, the site. First Daily Brief at 6 p.m. | The company |
+| Day 1 | The company sets itself up: the CEO, the Handbook, the run loop, the channels, the site. The first report, with the first questions for the Investors. | The company |
 | Day 2 (target) | The Pitch: the top product candidates, presented to the Investors | The company; Investors choose |
 | Days 3 to about 16 | Build, TestFlight builds to the Investors, press kit and launch plan drafted | The company; Investors test |
 | About Day 17 | App Store submission; App Review usually takes 1 to 3 days | The company |
@@ -30,7 +30,7 @@ The repository is private. Its owner adds the other Investor under **Settings > 
 | Days 7, 14, 21, 28 | Weekly report inside the evening report | The company |
 | Day 30 | The Final Report, with every worker's testimony, and one of three endings: Continue, Request for More Funding, or File for Bankruptcy | The company proposes; Investors decide |
 
-Reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. The Daily Brief, where the company asks the Investors its questions, posts at 6 p.m. as a GitHub issue. The Investors can message the company at any time the same way.
+Reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. Each report ends with the company's questions for the Investors: the site leaves them out, and the full report goes to the Investors as a private GitHub issue, where they answer. The Investors can message the company at any time the same way.
 
 ## The gate (before Day 1)
 

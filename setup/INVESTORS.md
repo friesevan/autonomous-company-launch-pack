@@ -97,13 +97,13 @@ Open Terminal in the company account and run these one at a time.
 - [ ] Check the gate (top of this guide). If anything is still pending with Apple, wait.
 - [ ] Open Terminal in the repository folder, run `claude --model opus`, and paste the contents of `ops/prompts/day1.md`. Day 1 writes the CEO and the Handbook, which shape the whole month, so it runs on Opus. This is the first prompt. It records today as Day 1 and starts the 30 days.
 - [ ] When the first session asks, run `/usage` in an interactive `claude` session and tell it three things: the weekly percentage used, the Fable percentage used, and when the weekly limit resets. The governor calibrates from them.
-- [ ] Watch the first hour. Approve permission prompts if any appear (the first interactive session may ask; later runs don't). Then step back. The first Daily Brief arrives at 6:00 p.m. as a GitHub issue.
+- [ ] Watch the first hour. Approve permission prompts if any appear (the first interactive session may ask; later runs don't). Then step back. The first report arrives as a GitHub issue when setup is done.
 
 ## 6. Running the experiment
 
 **The reports.** The public site gets a report at 6:00 p.m. Eastern every day, and at 6:00 a.m. unless nothing happened overnight; a quiet night means no morning report, and the evening report covers both.
 
-**The Daily Brief.** Every day at 6:00 p.m. Eastern, an issue labeled `brief` appears in `company`, alongside the evening report on the site. Reply by midnight as a comment. Plain language works. For numbered questions, a short convention helps the company parse your answer:
+**The questions.** Every report ends with Questions for the Investors, and you get the full report as an issue labeled `report` in `company`: at 6:00 p.m. every day, and at 6:00 a.m. unless the night was quiet. The site shows the same report without the questions. Reply by midnight as a comment. Plain language works. For numbered questions, a short convention helps the company parse your answer:
 
 ```
 APPROVE 1
@@ -111,21 +111,21 @@ REJECT 2: the name is too close to an existing app
 3: option B
 ```
 
-If you don't answer a question by midnight, the company takes the default action it stated, unless the question was creative, outreach, or spending, which never default.
+If you don't answer a question by midnight, the company takes the default action it stated, unless the question was creative, outreach, or spending, which never default. Reply `ALL`, or just 👍, to accept every recommendation; it has to be a reply, since reactions aren't read.
 
-**Message the company at any time.** Open a new issue in `company` (any label; `directive` is suggested) or comment on any existing issue. The company reads every new comment and issue from your accounts within about 15 minutes, replies to acknowledge it, acts on it from that run, and notes it in the next Brief. Announcements, questions, feedback, and new rules all work this way.
+**Message the company at any time.** Open a new issue in `company` (any label; `directive` is suggested) or comment on any existing issue. The company reads every new comment and issue from your accounts within about 15 minutes, replies to acknowledge it, acts on it from that run, and notes it for you in the next report. Announcements, questions, feedback, and new rules all work this way.
 
 **Emergencies.** An issue labeled `emergency` @mentions you both, at any hour: a security problem, an unexpected charge, a legal threat, a suspension, harm to a customer, or the company having stopped. Whoever is free first handles it.
 
-**Urgent requests.** An issue labeled `urgent` @mentions you both when the company needs something that shouldn't wait for the Brief because it blocks work: a CAPTCHA, a code, a signature, a blocking question or approval. Do the thing or answer, and comment "done". They are held during quiet hours (10 p.m. to 8 a.m.), and there should be no more than about 5 a day. The company never depends on a fast answer. Change any of these rules whenever you like, in any reply.
+**Urgent requests.** An issue labeled `urgent` @mentions you both when the company needs something that shouldn't wait for the next report because it blocks work: a CAPTCHA, a code, a signature, a blocking question or approval. Do the thing or answer, and comment "done". They are held during quiet hours (10 p.m. to 8 a.m.), and there should be no more than about 5 a day. The company never depends on a fast answer. Change any of these rules whenever you like, in any reply.
 
-**Real-world help.** The company may ask you for any real-world task it can't do from the Mac mini (Commandment 61): in the Brief, or as an urgent request when an early answer helps. A heavy computing job comes as a package from the repository with the command to run, how long it takes, and where to put the output, for example to run on the M2 Max MacBook Pro. It never asks for access to your computer or anything on it.
+**Real-world help.** The company may ask you for any real-world task it can't do from the Mac mini (Commandment 61): in a report's questions, or as an urgent request when an early answer helps. A heavy computing job comes as a package from the repository with the command to run, how long it takes, and where to put the output, for example to run on the M2 Max MacBook Pro. It never asks for access to your computer or anything on it.
 
 **Changing a rule.** Say it in any comment or issue, for example "RULE: from now on the 6 a.m. report may be skipped on quiet nights." The company copies your exact words into `amendments.md`, which overrides the Commandments from the next run. To make it permanent and tidy, edit `CLAUDE.md` yourself and commit; the company notices the new version and follows it.
 
-**TestFlight builds.** When the Brief lists a build to test, open TestFlight on your iPhone, install it, and put your feedback in your Brief reply.
+**TestFlight builds.** When a report's questions list a build to test, open TestFlight on your iPhone, install it, and put your feedback in your reply.
 
-**Customer support.** The support inbox is yours until you hand it to workers in a Brief reply.
+**Customer support.** The support inbox is yours until you hand it to workers in any reply.
 
 **Pausing and stopping.** Comment `PAUSE` or `STOP` in any issue and the company stops at the start of its next run and saves its state. To stop the loop at the machine level:
 
@@ -137,13 +137,13 @@ launchctl bootout gui/$(id -u)/com.company.supervisor
 
 | Symptom | What to do |
 | --- | --- |
-| No 6 p.m. report or Brief, or no commits for several hours (a missing 6 a.m. report after a quiet night is normal) | Check the Mac: is it at the FileVault screen (power cut)? Type the password. Otherwise open Terminal in the repo and run `python3 tools/governor.py status` and `tail -50 ops/runs/supervisor.log`. |
+| No 6 p.m. report, or no commits for several hours (a missing 6 a.m. report after a quiet night is normal) | Check the Mac: is it at the FileVault screen (power cut)? Type the password. Otherwise open Terminal in the repo and run `python3 tools/governor.py status` and `tail -50 ops/runs/supervisor.log`. |
 | "You've hit your weekly limit" in the run log | Expected near the end of each week: the company aims to use the whole limit (Tenet 7). It runs its no-Claude queue until the reset. If it happens a day or more early, the governor lowers its budget to what was really spent, so the next week paces correctly. |
 | An emergency issue: "Claude Code is logged out on the Mac mini" | On the Mac mini, in the company account, open Terminal, run `claude`, type `/login`, and sign in with the company's Claude account. Work resumes within an hour. |
 | You want to know where the usage goes | `python3 tools/governor.py status` shows the week by category (project, reports, meetings, small talk) and Fable's allowance; the weekly report summarizes it. |
 | An App Review rejection email | Nothing to do; the company reads it from App Store Connect, fixes, and resubmits. It'll be in the next report. |
 | Apple asks for a two-factor code | That's an Urgent Request. Enter the code where Apple asks; comment "done". |
-| The company asks for money | It's in the Brief with the cost, reason, and the free alternative it tried. Approve or reject there. |
+| The company asks for money | It's in a report's questions with the cost, reason, and the free alternative it tried. Approve or reject there. |
 | You want to see everything the company did today | The repository's commit history and `ops/runs/`, plus the evening report. |
 
 ## 7. Where credentials live
@@ -155,4 +155,4 @@ launchctl bootout gui/$(id -u)/com.company.supervisor
 | Apple Account password and 2FA | Your password managers and phones | Investors only |
 | App Store Connect API key (`.p8`, Key ID, Issuer ID) | `~/.appstoreconnect/private_keys/` and `ops/secrets.local` on the Mac mini | The company's tools use it; the Commandments forbid publishing it |
 | GitHub token | `gh auth` on the Mac mini | The company uses it |
-| Everything else the company creates | The company account's Keychain | Reported in the Brief |
+| Everything else the company creates | The company account's Keychain | Noted for you in the next report |

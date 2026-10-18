@@ -38,7 +38,7 @@ The loop ships in `tools/`, tested. Day 1 installs it; it is not built from scra
 2. **Sync.** `git pull --ff-only`, so Investor edits to `CLAUDE.md`, the rules, or the allowlist take effect on the next tick.
 3. **Inbox.** `tools/inbox_check.sh` asks GitHub for issues and comments since the last check, from allowlisted accounts, ignoring the company's own; if there are any, it creates `ops/inbox_pending`.
 4. **Decide.** `tools/governor.py decide` returns one of:
-    - `evening`, `weekly` (Days 7, 14, 21, 28), or `final` (Day 30): due at 6:00 p.m. and not yet done today; the narrative pass, the report, and the Daily Brief.
+    - `evening`, `weekly` (Days 7, 14, 21, 28), or `final` (Day 30): due at 6:00 p.m. and not yet done today; the narrative pass and the report, questions included.
     - `morning`: due between 6:00 a.m. and noon, only if an evening report exists from an earlier day and `tools/quiet_night.py` found activity since it. A quiet night marks the morning as skipped and moves on.
     - `queue`: a usage limit was hit and its pause hasn't ended, Claude Code was found logged out within the last hour, or today's share of the weekly budget is spent. The supervisor runs `tools/run_queue.sh` instead of Claude.
     - `skip`: nothing to do: no open task on the board, no pending Investor message, and a work session ran within the last hour. If the week is behind pace, a `work` session with `backlog` runs instead (at most every two hours), and the CEO refills the board (Tenet 7).
@@ -54,7 +54,7 @@ The loop ships in `tools/`, tested. Day 1 installs it; it is not built from scra
 | --- | --- | --- | --- | --- | --- |
 | `work` | `work.md` | sonnet | medium | 40 | Dispatching and bookkeeping; workers do the hard thinking on the model each task needs (Tenet 6) |
 | `morning` | `morning.md` | haiku | low | 20 | A report assembled from the event log |
-| `evening` | `evening.md` | sonnet | low | 30 | The report and the Daily Brief, which carries the Investors' decisions; diaries on Haiku |
+| `evening` | `evening.md` | sonnet | low | 30 | The report, ending in the questions for the Investors; diaries on Haiku |
 | `weekly` | `evening.md` | sonnet | medium | 45 | The evening report plus "Week N in review" |
 | `final` | `evening.md` | opus | high | 70 | The Final Report on Day 30; testimonies on Sonnet, the verdict on Fable |
 
@@ -76,7 +76,7 @@ Progress lives in files, never in conversation history. A session that runs out 
 
 Headless runs use `--permission-mode auto --permission-prompts none`: a classifier reviews each action instead of a person, and anything that would still need a person is denied and logged, so the run continues instead of stalling. Auto mode can't be set from the project's settings file, so the supervisor passes the flag. Bypass mode is never used; Claude Code reserves it for isolated containers and virtual machines.
 
-**Claude Code protects `.claude/`.** Writes inside it are never auto-approved; in auto mode the classifier decides each one, and it may refuse. So the company keeps everything it changes outside `.claude/`: worker personas live in `personnel/agents/` and reach Claude Code through `--agents`. The exception Claude Code makes, Markdown files in `.claude/agent-memory/`, is exactly where worker memories live. The company never needs to edit `.claude/settings.json`; changes to permissions are requested from the Investors in the Daily Brief.
+**Claude Code protects `.claude/`.** Writes inside it are never auto-approved; in auto mode the classifier decides each one, and it may refuse. So the company keeps everything it changes outside `.claude/`: worker personas live in `personnel/agents/` and reach Claude Code through `--agents`. The exception Claude Code makes, Markdown files in `.claude/agent-memory/`, is exactly where worker memories live. The company never needs to edit `.claude/settings.json`; changes to permissions are requested from the Investors in a report's questions.
 
 `.claude/settings.json` (shipped in the Launch Pack):
 
@@ -86,14 +86,14 @@ Headless runs use `--permission-mode auto --permission-prompts none`: a classifi
 - **A hook** (`rules/hooks/protect-records.sh`) runs before every shell command, in the Operator and in every worker, and blocks any `rm`, `mv`, `git rm`, `git mv`, `git clean`, or `-delete` that touches `log/`, `story/`, `reports/`, `rules/`, `setup/`, `investors/`, `CLAUDE.md`, or `amendments.md`. Records are archived, never deleted.
 - **Environment:** at most 3 subagents at once, and subagents can't spawn subagents. Claude Code follows the `stable` update channel, so a fresh release can't change behavior mid-month.
 
-**Fallback.** If auto mode is unavailable in a run (Claude Code reports it started in Manual mode), the supervisor retries with `--permission-mode acceptEdits` plus the allow list, and the Operator reports the change in the next Brief.
+**Fallback.** If auto mode is unavailable in a run (Claude Code reports it started in Manual mode), the supervisor retries with `--permission-mode acceptEdits` plus the allow list, and the Operator notes the change for the Investors in the next report.
 
 ## 4. The usage governor
 
 The Max plan has a rolling 5-hour window and a weekly window, shared across all models and with claude.ai. Fable has its own ceiling inside the weekly one: up to half of the weekly limit, after which the plan bills usage credits. The governor keeps the company inside all three, paces to about 1/7 of the week per day so that the weekly limit is used up by the reset (Tenet 7), and keeps the story's overhead under its caps (Tenet 6).
 
 - **The budget unit** is Claude Code's own cost estimate, `total_cost_usd` in each run's result, which prices every model at its API rate (per million tokens: Fable $10 in / $50 out, Opus $4 / $20, Sonnet $2 / $10, Haiku $0.10 / $0.50, October 2026). One weekly figure in `ops/usage.json` (`weekly_budget_usd`) therefore paces every model at once. The default, $150, is a deliberately low guess. **On Day 1 the company calibrates it:** run a few sessions, compare the governor's spend with the percentages in `/usage` (an Investor can read them in an interactive session), and set `python3 tools/governor.py set-budget <usd>` so that 100% of the weekly limit matches the figure. After that the governor recalibrates itself from real limit hits and fully spent weeks (below), and the Investors can correct it from `/usage` at any time.
-- **The week** runs in 7-day windows from Day 1 unless `week_anchor` in `ops/usage.json` is set to the real reset time. Each day's share = (budget − spent this week before today) ÷ days left, today included; it stays fixed through the day, so the last day can spend everything that's left. Work sessions stop when today's spend reaches 90% of the share; the other 10% is the reserve for reports, the Brief, and urgent requests, which always run. Once the evening report has run, the reserve goes back to work.
+- **The week** runs in 7-day windows from Day 1 unless `week_anchor` in `ops/usage.json` is set to the real reset time. Each day's share = (budget − spent this week before today) ÷ days left, today included; it stays fixed through the day, so the last day can spend everything that's left. Work sessions stop when today's spend reaches 90% of the share; the other 10% is the reserve for reports and urgent requests, which always run. Once the evening report has run, the reserve goes back to work.
 - **Fable's budget** (`fable_budget_usd`) starts at half the weekly budget, the share of the weekly limit the plan includes for Fable, and is calibrated on Day 1 from the Fable figure in `/usage` (`python3 tools/governor.py set-fable-budget <usd>`). It is counted from each run's per-model costs. Once it's spent, or a run reports the Fable limit, `ops/run.json` says `fable_ok: false` until the week resets (or for 24 hours after a Fable limit message), the model guard refuses Fable, and the Operator uses Opus at high effort instead. Other models keep running.
 - **Use it all (Tenet 7).** Usage left at the reset is lost, so the governor steers toward spending the weekly budget in full:
     - **Pace flags.** When the days already finished this week spent under 85% of their share, `ops/run.json` says `upgrade: true` and the Operator moves Haiku and Sonnet work up one model. A company that can't spend its allowance in the hours available spends it on stronger models instead. Fable is never pushed: it shares the weekly limit, so it is used as its work needs, and its budget is only a ceiling.
@@ -180,7 +180,7 @@ Every persona has a career goal (Commandment 23). The CEO's review system (Comma
 
 ### Portraits
 
-`tools/portrait.*` (built on Day 1) takes a worker's first name, hashes it into parameters, and draws a deterministic SVG from a mathematical expression (for example a superformula silhouette, a harmonograph, or a symmetric tiling with a palette derived from the hash). The same name always produces the same portrait. The script is committed; its output goes to `personnel/portraits/<first-name>.svg`. The portrait style, as a style, is proposed in the first Brief with the report page (Commandment 15).
+`tools/portrait.*` (built on Day 1) takes a worker's first name, hashes it into parameters, and draws a deterministic SVG from a mathematical expression (for example a superformula silhouette, a harmonograph, or a symmetric tiling with a palette derived from the hash). The same name always produces the same portrait. The script is committed; its output goes to `personnel/portraits/<first-name>.svg`. The portrait style, as a style, is proposed in the first report's questions, with the report page (Commandment 15).
 
 ### Cast size
 
@@ -205,24 +205,26 @@ All channels are GitHub issues in `company`, created and read with `gh` as the c
 
 | Channel | Mechanism |
 | --- | --- |
-| Daily Brief | `gh issue create --label brief --title "Daily Brief — Day N — YYYY-MM-DD"` at 6:00 p.m., body in the Commandment 55 format, with links to the evening report, any TestFlight build, and any `pitch` issue. |
+| Report questions | `gh issue create --label report --title "Report N — Day D — YYYY-MM-DD"` for every report, posted by the site build: the full report, ending in its Questions for the Investors (Commandment 55), with links to any TestFlight build and any `pitch` issue. |
 | Emergency | `gh issue create --label emergency` with both Investors @mentioned in the body. Sent at once, at any hour, never limited (Commandment 53). |
-| Urgent Request | `gh issue create --label urgent` with both Investors @mentioned in the body, for anything that shouldn't wait for the Brief. Held during quiet hours (10 p.m. to 8 a.m.); about 5 a day at most, as a guide. |
-| The Pitch | `gh issue create --label pitch` with `pitches/PITCH.md` as the body, linked from the Brief. |
-| The Final Report | On Day 30, a `brief` issue carrying the Final Report and the three endings. |
-| **Inbound, at any time** | Every tick, `tools/inbox_check.sh` asks GitHub (no Claude) for issues and comments since `inbox_last_check` in `ops/state.json`, from allowlisted accounts only, ignoring the company's own account, and creates `ops/inbox_pending` if there are any. The next session reads them first: `gh api repos/<org>/company/issues/comments?since=<ts>` and the new issues, filtered by `investors/allowlist.md`. Each kept message gets an acknowledging reply, is acted on in that run, and is listed in the next Brief; the Operator then updates `inbox_last_check` and deletes the marker. `PAUSE` or `STOP` in a message halts work at once. |
+| Urgent Request | `gh issue create --label urgent` with both Investors @mentioned in the body, for anything that shouldn't wait for the next report. Held during quiet hours (10 p.m. to 8 a.m.); about 5 a day at most, as a guide. |
+| The Pitch | `gh issue create --label pitch` with `pitches/PITCH.md` as the body, linked from the next report's questions. |
+| The Final Report | On Day 30, the Final Report's own `report` issue, where the Investors choose one of the three endings. |
+| **Inbound, at any time** | Every tick, `tools/inbox_check.sh` asks GitHub (no Claude) for issues and comments since `inbox_last_check` in `ops/state.json`, from allowlisted accounts only, ignoring the company's own account, and creates `ops/inbox_pending` if there are any. The next session reads them first: `gh api repos/<org>/company/issues/comments?since=<ts>` and the new issues, filtered by `investors/allowlist.md`. Each kept message gets an acknowledging reply, is acted on in that run, and is listed for the Investors in the next report; the Operator then updates `inbox_last_check` and deletes the marker. `PAUSE` or `STOP` in a message halts work at once. |
 | Amendments | A message that changes a rule or a standing decision is copied verbatim, with its date, link, and the Commandments it affects, into `amendments.md` (format in that file). It reaches the Operator through `CLAUDE.md`'s import and every worker through `build_agents.py`. |
-| Closing | The Operator closes an issue once every question in it is answered or the request is done, linking the result. |
-| Reports | Generated into `reports/`, then committed to the `site` repository, which GitHub Pages serves. The site has the archive, a cast page with portraits, the disclosure notice (Commandment 44), the privacy policy, and the support page. |
-| Commandment changes | Only the Investors commit `CLAUDE.md`. The Operator notices a new version in `git log`, notes it in the next Brief, and follows it from that run. |
-| Optional push layer | If GitHub's @mention notifications prove unreliable, the Operator may propose ntfy.sh (free, one HTTP POST per notification) in a Brief. |
-| Answering from the report site | Not used. The site is public and static, while Briefs and requests are private (Commandment 42). A private site on GitHub Pages needs the paid GitHub Enterprise Cloud plan; any other route needs a login service, a small server, and a second path for instructions to secure. The GitHub mobile app already gives the Investors a phone-friendly way to answer, with verified identity and a permanent record. The company may propose something better later (Commandment 3). |
+| Closing | The Operator closes an issue once every question in it is answered or the request is done, linking the result. A report issue also closes once the next report carries its open questions forward. |
+| Reports | Generated into `reports/`. The site build publishes each one twice: the `site` repository, which GitHub Pages serves, gets it without its Questions for the Investors, which become one line such as "2 questions are with the Investors"; the full report becomes the report issue above. The site has the archive, a cast page with portraits, the disclosure notice (Commandment 44), the privacy policy, and the support page. |
+| Commandment changes | Only the Investors commit `CLAUDE.md`. The Operator notices a new version in `git log`, notes it for the Investors in the next report, and follows it from that run. |
+| Optional push layer | If GitHub's @mention notifications prove unreliable, the Operator may propose ntfy.sh (free, one HTTP POST per notification) in a report's questions. |
+| Answering from the report site | Not used. The site is public and static, while the questions and requests are private (Commandment 42). A private site on GitHub Pages needs the paid GitHub Enterprise Cloud plan; any other route needs a login service, a small server, and a second path for instructions to secure. The GitHub mobile app already gives the Investors a phone-friendly way to answer, with verified identity and a permanent record. The company may propose something better later (Commandment 3). |
 
 ## 8. Reports
 
 ### Daily report
 
 The Commandment 39 structure, 800 to 1,500 words plus excerpts, written on Haiku in the morning and on Sonnet in the evening, from `log/events.jsonl` (`python3 tools/events.py since <time>`), the commits, the board, the ledger, and only the records in `story/` it quotes. It reads the event log first and opens nothing else unless it needs it.
+
+**The questions.** Every report ends with the Questions for the Investors (Commandment 55). Anything that needs the Investors but can wait (a decision, a creative approval, a purchase request, a build to test) is written in `ops/questions.md` when it comes up, with the context, the options, the company's recommendation, and the default action. Each report copies the open ones, so the 6:00 a.m. report on Haiku never has to compose a question, and the Operator records each answer there when it arrives. With nothing open, the section says so in one line.
 
 **Quiet nights.** At 6:00 a.m., the governor runs `tools/quiet_night.py` against the time of the last evening report. It checks, without Claude, for commits other than the supervisor's own, new event-log lines, a pending Investor message, and failed runs. If there are none, the morning report is skipped, the skip is noted in `ops/state.json`, and the evening report covers both periods (Commandment 37). A morning report is never produced before the first evening report exists.
 
@@ -253,7 +255,7 @@ Replaces the evening report:
 5. The verdict and the ending: Continue, Request for More Funding (with the evidence of promise and what the next month buys), or File for Bankruptcy (with the wind-down plan).
 6. A closing paragraph from the narrator.
 
-It is published on the site and posted as a `brief` issue for the Investors' decision.
+It is published like every report, and the Investors choose the ending in their reply to its issue.
 
 ## 9. Files
 
@@ -280,6 +282,7 @@ ops/run.json               The current decision, written by the supervisor for t
 ops/agents.json            Built by rules/build_agents.py before every run (not committed)
 ops/state.md               The Operator's narrative state: goals, open tasks, blockers (under 150 lines)
 ops/board.md               The task board
+ops/questions.md           Open questions for the Investors, and their answers
 ops/runs/                  One result per run (.json, committed), its full stream (.jsonl, kept 7 days, not committed), the supervisor log, build logs
 ops/queue/                 Work that runs without Claude; done/ holds finished items
 tests/                     Checks for the run loop with a stand-in claude and gh: tests/run.sh
@@ -300,7 +303,7 @@ The CEO may reorganize anything not marked "Investors edit only" or "never delet
 
 ## 10. What "setup finished" means on Day 1
 
-The Operator reports setup finished, and opens the first Daily Brief, only when all of these are true:
+The Operator reports setup finished, and posts the first report, only when all of these are true:
 
 - [ ] `python3 tools/governor.py set-day1` has run, and `ops/state.md` records Day 1 and the time zone.
 - [ ] The CEO's persona (`personnel/agents/`), memory, portrait, registry entry, and career goal exist, and `python3 rules/build_agents.py` produces a valid `ops/agents.json`.
@@ -314,9 +317,9 @@ The Operator reports setup finished, and opens the first Daily Brief, only when 
 - [ ] `tools/run_queue.sh` ran at least one queue item, and `tools/xc.sh` builds and tests a sample project.
 - [ ] The protect-records hook blocks a test `rm` of a file in `log/`.
 - [ ] `python3 rules/lookup.py 9` prints Commandment 9.
-- [ ] The issue labels exist (`brief`, `urgent`, `emergency`, `pitch`, `directive`), `tools/quiet_night.py` and `tools/inbox_check.sh` run without error, and a test issue was created, detected by the inbox check, acknowledged, and closed.
+- [ ] The issue labels exist (`report`, `urgent`, `emergency`, `pitch`, `directive`), `tools/quiet_night.py` and `tools/inbox_check.sh` run without error, and a test issue was created, detected by the inbox check, acknowledged, and closed.
 - [ ] The site builds and deploys, with the disclosure notice, the cast page, and placeholder privacy and support pages.
-- [ ] The first Brief is posted, containing the CEO's persona and portrait, the report page, the portrait style, the calibrated budget, and anything that blocked setup.
+- [ ] The first report is posted as a private issue, containing the CEO's persona and portrait, the report page, the portrait style, the calibrated budget, and anything that blocked setup.
 
 ## 11. Keeping runs cheap
 
@@ -332,7 +335,7 @@ The Operator sends each task to a worker as a short, complete packet, so the wor
 
 ```
 Task: <one sentence>
-Why: <the goal or Brief item it serves>
+Why: <the goal or question it serves>
 Files: <exact paths to read and to change>
 Rules: <Commandment numbers that apply, e.g. 9, 51; and any amendment>
 Form: alone | pair with <name> | hand-off to <name> for review
@@ -362,7 +365,7 @@ Estimates for a typical day of the build, from the same model (Claude Code's own
 | Item | Model | Per day: processed (written) | Cost per day | 30 days |
 | --- | --- | --- | --- | --- |
 | Morning report (skipped after quiet nights) | Haiku | 0.45M (4k) | $0.02 | $0.5 |
-| Evening report and Daily Brief | Sonnet | 0.84M (10k) | $0.39 | $11.3 |
+| Evening report, questions included | Sonnet | 0.84M (10k) | $0.39 | $11.3 |
 | Weekly review, Days 7/14/21/28 (extra) | Sonnet | 0.86M (14k) each | | $1.3 |
 | Final Report, 7 testimonies, the verdict | Opus, Sonnet, Fable | 6.0M (103k) once | | $5.9 |
 | Diaries and small talk: 5 diaries, 2 exchanges | Haiku | 0.57M (8k) | $0.09 | $2.6 |
@@ -416,7 +419,7 @@ Workers carry one page of rules and look up anything else with `rules/lookup.py`
 | --- | --- |
 | The supervisor, governor, inbox check, quiet-night check, queue runner, event log, build wrapper, LaunchAgent installer | The worker generator and the portrait script |
 | The session prompts (`ops/prompts/`) | The Company Handbook and the character bible |
-| The permission rules, the protect-records hook, and the model guard | The report site and its build script |
+| The permission rules, the protect-records hook, and the model guard | The report site and its build script, which publishes each report's two copies |
 | The rule lookup tool and the worker assembler | The site's privacy and support pages (placeholders) |
 | The tests (`tests/run.sh`) | |
 
