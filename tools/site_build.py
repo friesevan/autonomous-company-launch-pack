@@ -43,7 +43,10 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, "tools")
 sys.path.insert(0, TOOLS)
-from portrait import portrait_svg, default_temperament, TEMPERAMENTS  # noqa: E402
+from portrait import portrait_svg, default_temperament, assign_variants, params as portrait_params, TEMPERAMENTS  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+
+TZ = ZoneInfo("America/New_York")
 
 DEFAULT_SITE = {
     "name": "The Company",
@@ -274,6 +277,103 @@ def stacked(shares, caps):
     return f'<div class="stack">{"".join(segs)}</div><div class="legend">{"".join(legend)}</div>'
 
 
+def event_time(e):
+    try:
+        d = dt.datetime.fromisoformat(str(e.get("time", "")).replace("Z", "+00:00"))
+        return (d if d.tzinfo else d.replace(tzinfo=TZ)).astimezone(TZ).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def when_time(s):
+    try:
+        return dt.datetime.strptime(s, "%Y-%m-%d %H:%M")
+    except ValueError:
+        return None
+
+
+REPORT_GRACE = dt.timedelta(minutes=90)
+PEOPLE_TYPES = {"hire": "joined", "departure": "left", "promotion": "promoted", "demotion": "demoted", "pay": "pay change", "review": "reviewed"}
+MILESTONE_TYPES = ("hire", "departure", "promotion", "decision", "pitch", "build", "submit", "release", "launch", "sale", "review", "amendment")
+
+
+def rail(events, by_slug, limit=40):
+    """A vertical timeline of events, oldest first, each with time, worker, type, and summary."""
+    rows = list(reversed(events[:limit]))
+    if not rows:
+        return '<p class="mood-why">Nothing was logged in this period.</p>'
+    out = ['<ol class="rail">']
+    for e in rows:
+        wslug = str(e.get("worker", "")).lower()
+        who = f'<a href="{rel("/cast/" + wslug + ".html")}">{esc(by_slug[wslug]["name"])}</a>' if wslug in by_slug else esc(e.get("worker", ""))
+        link = f' <a href="{esc(e["link"])}">link</a>' if e.get("link") and e["link"] != "(private)" else ""
+        t = event_time(e)
+        out.append(f'<li class="t-{esc(e.get("type", ""))}"><time>{t.strftime("%a %H:%M") if t else ""}</time>'
+                   f'<span class="tag">{esc(e.get("type", ""))}</span> <b>{who}</b> {esc(e.get("summary", ""))}{link}</li>')
+    out.append("</ol>")
+    return "".join(out)
+
+
+def daily_bars(days, values, share, width=640, height=90):
+    """Spend per day as bars against the daily share line."""
+    if not days:
+        return ""
+    top = max(max(values), share, 1.0) * 1.15
+    L, R, T, B = 36, 8, 8, 22
+    bw = (width - L - R) / len(days)
+    y = lambda v: T + (1 - v / top) * (height - T - B)  # noqa: E731
+    out = [f'<svg class="chart small" viewBox="0 0 {width} {height}" role="img" aria-label="Claude usage by day">']
+    out.append(f'<line x1="{L}" y1="{y(share):.1f}" x2="{width - R}" y2="{y(share):.1f}" stroke="var(--accent)" stroke-dasharray="4 4" opacity=".7"/>')
+    out.append(f'<text x="{L - 4}" y="{y(share) + 4:.1f}" text-anchor="end" class="lbl">1/7</text>')
+    for i, (d, v) in enumerate(zip(days, values)):
+        x0 = L + i * bw + bw * 0.15
+        cls = state_class(v / share if share else 0)
+        out.append(f'<rect x="{x0:.1f}" y="{y(v):.1f}" width="{bw * 0.7:.1f}" height="{y(0) - y(v):.1f}" rx="2" class="d-{cls}"><title>{d}: ${v:,.2f}</title></rect>')
+        if i % max(1, len(days) // 7) == 0 or i == len(days) - 1:
+            out.append(f'<text x="{x0 + bw * 0.35:.1f}" y="{height - 6}" text-anchor="middle" class="lbl">{d[5:]}</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def people_strip(events, by_slug, variants):
+    items = []
+    for e in reversed(events):
+        t = str(e.get("type", "")).lower()
+        if t not in PEOPLE_TYPES:
+            continue
+        wslug = str(e.get("worker", "")).lower()
+        name = by_slug[wslug]["name"] if wslug in by_slug else e.get("worker", "")
+        img = f'<img src="{rel("/assets/portraits/" + wslug + ".svg")}" alt="">' if wslug in by_slug else ""
+        items.append(f'<a class="person" href="{rel("/cast/" + wslug + ".html")}">{img}<b>{esc(name)}</b><small>{PEOPLE_TYPES[t]}</small></a>')
+    return f'<div class="people">{"".join(items)}</div>' if items else ""
+
+
+def mood_list(story, by_slug, start, end):
+    items = []
+    for s_ in sorted(story, key=lambda m: m["when"]):
+        t = when_time(s_["when"])
+        if s_.get("kind") != "diary" or s_.get("mood") is None or not t or not (start < t <= end):
+            continue
+        for w in s_["workers"]:
+            name = by_slug[w]["name"] if w in by_slug else w
+            items.append(f'<li><a href="{rel("/cast/" + w + ".html")}">{esc(name)}</a>: {mood_chip(s_["mood"], s_.get("feeling"), s_["mood_reason"])} '
+                         f'<a class="mood-why" href="{rel("/story/" + s_["path"] + ".html")}">diary</a></li>')
+    return f'<ul class="moods">{"".join(items)}</ul>' if items else ""
+
+
+def small_multiples(workers, moods, start_day, end_day, day_of):
+    """One sparkline per active worker over a day range (mood by day)."""
+    cards = []
+    for w in workers:
+        pts = [(day_of(m[0]), m[1]) for m in moods.get(w["slug"], []) if start_day <= day_of(m[0]) <= end_day]
+        if len(pts) < 2:
+            continue
+        vals = [v for _, v in pts]
+        last = moods[w["slug"]][-1]
+        cards.append(f'<div class="mini"><b>{esc(w["name"])}</b> {mood_chip(last[1], last[3])}{sparkline(vals, 120, 30)}</div>')
+    return f'<div class="minis">{"".join(cards)}</div>' if cards else ""
+
+
 # ---------- readers ----------
 
 def load_config():
@@ -475,6 +575,15 @@ img.portrait{width:120px;height:120px;border-radius:16px;float:right;margin:0 0 
 .cast .mood-word{display:inline-block;margin-top:6px;font-size:13px}
 details{margin:12px 0}summary{cursor:pointer}footer{padding:28px 18px 44px;color:var(--muted);font-size:14px}blockquote{border-left:3px solid var(--line);margin:0;padding-left:12px;color:var(--muted)}
 .tag{font-size:12px;padding:1px 7px;border:1px solid var(--line);border-radius:10px;color:var(--muted);white-space:nowrap}
+.period h3{margin:14px 0 6px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.period h3:first-child{margin-top:0}
+.rail{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line)}.rail li{position:relative;margin:0 0 10px;padding-left:12px;font-size:15px}
+.rail li::before{content:"";position:absolute;left:-21px;top:7px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--soft)}
+.rail li.t-hire::before,.rail li.t-sale::before,.rail li.t-launch::before{background:var(--ok)}.rail li.t-departure::before{background:var(--hot)}.rail li.t-decision::before{background:var(--pink)}
+.rail time{display:inline-block;min-width:76px;color:var(--muted);font-size:13px}
+.people{display:flex;flex-wrap:wrap;gap:12px}.person{display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--bg)}.person img{width:40px;height:40px;border-radius:8px}.person small{color:var(--muted)}
+.moods{list-style:none;padding:0;margin:0}.moods li{margin:6px 0}
+.chart.small .lbl{font-size:10px}.d-ok{fill:var(--ok)}.d-warm{fill:var(--warm)}.d-hot{fill:var(--hot)}
+.minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}.mini{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px}.mini .spark{margin-left:auto}
 .reports{list-style:none;padding:0}.reports li{margin:8px 0}.latest{font-size:15px;color:var(--muted);margin:6px 0 0}
 @media (min-width:720px){.hero.two{grid-template-columns:3fr 2fr}.strip{grid-template-columns:1fr 1fr}}
 @media (prefers-reduced-motion:reduce){.bar-fill{transition:none}}
@@ -606,9 +715,10 @@ def build(out, use_gh=True):
     # Portraits: the still copies as drawn on hire, and animated ones that carry today's mood
     for p in glob.glob(os.path.join(ROOT, "personnel", "portraits", "*.svg")):
         site.copy(p, os.path.join("assets", "portraits", "still", os.path.basename(p)))
+    variants = assign_variants([w["name"] for w in workers])
     for w in workers:
         site.write(os.path.join("assets", "portraits", f"{w['slug']}.svg"),
-                   portrait_svg(w["name"], w["temperament"], latest_mood(w["slug"])[1]))
+                   portrait_svg(w["name"], w["temperament"], latest_mood(w["slug"])[1], variant=variants.get(w["name"], 0)))
 
     def portrait_img(slug, cls=""):
         c = f' class="{cls}"' if cls else ""
@@ -632,6 +742,38 @@ def build(out, use_gh=True):
                  f'<div class="row">{bar("Claude usage that day", used, weekly_budget / 7, note=f"${used:,.2f} of a 1/7 share")}</div>',
                  f'<div class="row"><span>Team morale that day:</span> {team_chip}</div>',
                  "</div>"]
+        # This period: events, people, moods, and usage since the previous report
+        # A report's window runs from the previous report to this one, each shifted by a grace
+        # period: the diaries and events of a report session are written after its nominal time.
+        i = reports.index(r)
+        end_t = (when_time(r["when"]) or dt.datetime(1970, 1, 1)) + REPORT_GRACE
+        prev = reports[i + 1]["when"] if i + 1 < len(reports) else None
+        start_t = ((when_time(prev) + REPORT_GRACE) if prev and when_time(prev)
+                   else (dt.datetime.combine(day1, dt.time(0, 0)) if day1 else dt.datetime(1970, 1, 1)))
+        in_window = [e for e in events if (lambda t: t and start_t < t <= end_t)(event_time(e))]
+        period = ['<div class="panel period">', f'<h3>What happened since the last report</h3>', rail(in_window, by_slug)]
+        people = people_strip(in_window, by_slug, variants)
+        if people:
+            period += ["<h3>People</h3>", people]
+        ml = mood_list(story, by_slug, start_t, end_t)
+        if ml:
+            period += ["<h3>How they felt</h3>", ml]
+        if kind in ("weekly", "final"):
+            span = 30 if kind == "final" else 7
+            rdate = dt.date.fromisoformat(r["date"]) if r.get("date") else None
+            dlist = [(rdate - dt.timedelta(days=k)).isoformat() for k in range(span - 1, -1, -1)] if rdate else []
+            vals = [num(usage_days.get(d)) for d in dlist]
+            period += [f"<h3>Claude usage, the last {span} days</h3>", daily_bars([d for d in dlist], vals, weekly_budget / 7)]
+            day_of = (lambda when_s: (dt.date.fromisoformat(when_s[:10]) - day1).days + 1) if day1 else (lambda when_s: 0)
+            sm = small_multiples(active, moods, max(1, rday - span + 1), rday, day_of)
+            if sm:
+                period += [f"<h3>Mood over the {'month' if kind == 'final' else 'week'}</h3>", sm]
+            if kind == "final":
+                milestones = [e for e in events if str(e.get("type", "")).lower() in MILESTONE_TYPES]
+                period += ["<h3>The month, in milestones</h3>", rail(milestones, by_slug, limit=60)]
+                if history:
+                    period += ["<h3>Net proceeds by day</h3>", revenue_chart(history, goal, days_total, day1)]
+        period.append("</div>")
         head = {"layout": "default", "title": r["title"], "date": f"{r['when']}:00", "kind": kind,
                 "day": r.get("day"), "number": r.get("number")}
         extra = ""
@@ -639,7 +781,7 @@ def build(out, use_gh=True):
             extra = (f"\n> **Investors:** this report's private copy, with its Questions for the Investors, is "
                      f"[on GitHub]({r['issue']}). Answer there by midnight.\n")
         site.write(os.path.join("_posts", f"{r['date']}-{r['slug']}.md"),
-                   fm(head) + "\n".join(strip) + "\n" + extra + "\n" + raw(r["body"]))
+                   fm(head) + "\n".join(strip) + "\n" + "\n".join(period) + "\n" + extra + "\n" + raw(r["body"]))
 
     # Reports index
     site.write(os.path.join("reports", "index.md"), "\n".join([
@@ -717,7 +859,8 @@ def build(out, use_gh=True):
         page += [f'<div class="mood"><div>{mood_chip(mlevel, mword, mreason, big=True)}'
                  + (f'<div class="why">{mwhen}, from their diary</div>' if mwhen else "") + "</div>"
                  + (sparkline([m[1] for m in hist[-30:]]) if len(hist) > 1 else "") + "</div>", ""]
-        rows = [("Temperament", f"{w['temperament']}: {TEMPERAMENTS[w['temperament']][3]}"), ("Joined", w.get("joined")), ("Left", w.get("left")),
+        rows = [("Portrait", f"{portrait_params(w['name'], variants.get(w['name'], 0))['family']} curve, seeded by the name"),
+                ("Temperament", f"{w['temperament']}: {TEMPERAMENTS[w['temperament']][2]}"), ("Joined", w.get("joined")), ("Left", w.get("left")),
                 ("Hiring round", w.get("round")), ("Salary (credits, fictional)", w.get("salary")), ("Career goal", w.get("career_goal"))]
         page += ["| | |", "| --- | --- |"] + [f"| {k} | {cell(scrub(str(v)))} |" for k, v in rows if v] + [""]
         if hist:

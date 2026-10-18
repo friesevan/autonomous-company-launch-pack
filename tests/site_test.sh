@@ -137,6 +137,42 @@ ok "pages: written privacy copied, others are placeholders" "grep -q 'We collect
 ok "story/private is skipped" "[ ! -e $OUT/story/private ] && ! grep -rq 'Secret plan' $OUT"
 ok "disclosure in the layout" "grep -q 'site.disclosure' $OUT/_layouts/default.html && grep -q 'AI-simulated' $OUT/_config.yml"
 
+echo "== report period panel: timeline, people, moods"
+ok "evening report lists the period's events as a timeline, oldest first" "grep -q 'class=\"rail\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'First compiling build' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Chose SwiftUI' $OUT/_posts/2026-11-03-*evening.md && ! grep -q 'Tests green' $OUT/_posts/2026-11-03-*evening.md"
+ok "morning report covers only its own window" "grep -q 'Tests green' $OUT/_posts/2026-11-04-*morning.md && ! grep -q 'First compiling build' $OUT/_posts/2026-11-04-*morning.md"
+ok "the period's diary mood appears with the worker's word" "grep -q 'How they felt' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Relieved' $OUT/_posts/2026-11-03-*evening.md"
+printf '{"time": "2026-11-03T12:00:00-05:00", "worker": "maya", "type": "hire", "summary": "Maya joins as iOS engineer", "link": ""}\n' >> log/events.jsonl
+cat > reports/2026-11-07-1800.md <<'EOF'
+---
+title: Report 11 — Week 1 in review
+number: 11
+day: 7
+date: 2026-11-07
+time: 18:00
+kind: weekly
+---
+Week one.
+EOF
+python3 tools/site_build.py --out $OUT --no-gh >/dev/null
+ok "a hire shows in the People strip with the portrait" "grep -q 'class=\"people\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'joined' $OUT/_posts/2026-11-03-*evening.md && grep -q 'portraits/maya.svg' $OUT/_posts/2026-11-03-*evening.md"
+ok "weekly report adds the 7-day usage bars and per-worker mood lines" "grep -q 'last 7 days' $OUT/_posts/2026-11-07-*weekly.md && grep -q 'Claude usage by day' $OUT/_posts/2026-11-07-*weekly.md && grep -q 'class=\"minis\"' $OUT/_posts/2026-11-07-*weekly.md"
+rm -f reports/2026-11-07-1800.md
+cat > reports/2026-11-30-1800.md <<'EOF'
+---
+title: Report 60 — the Final Report
+number: 60
+day: 30
+date: 2026-11-30
+time: 18:00
+kind: final
+---
+The end.
+EOF
+python3 tools/site_build.py --out $OUT --no-gh >/dev/null
+ok "final report adds the month's milestones and the revenue chart" "grep -q 'in milestones' $OUT/_posts/2026-11-30-*final.md && grep -q 'Maya joins' $OUT/_posts/2026-11-30-*final.md && grep -q 'net proceeds by day' $OUT/_posts/2026-11-30-*final.md"
+rm -f reports/2026-11-30-1800.md
+ok "portraits use the distinct variants and carry the family on the worker page" "grep -q 'curve, seeded by the name' $OUT/cast/maya.md"
+
 echo "== post-launch: the revenue chart becomes the hero"
 printf '{"revenue_usd": 61.5, "spent_usd": 99, "day": 24, "days_left": 6, "app_name": "Orbit", "status": "on sale", "stage": "selling", "launched": "2026-11-20", "history": [{"date": "2026-11-20", "revenue_usd": 0}, {"date": "2026-11-22", "revenue_usd": 20}, {"date": "2026-11-24", "revenue_usd": 61.5}]}\n' > ops/scoreboard.json
 python3 tools/site_build.py --out $OUT --no-gh >/dev/null
