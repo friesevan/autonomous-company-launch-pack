@@ -27,7 +27,7 @@ day: 3
 date: 2026-11-03
 time: 18:00
 kind: evening
-questions_issue: https://github.com/test/company/issues/7
+issue: https://github.com/test/company/issues/7
 ---
 # Report 5
 
@@ -71,9 +71,9 @@ echo "== build"
 ok "builds and reports counts" "python3 tools/site_build.py --out $OUT | grep -q 'reports 2, workers 3, events 3, story 1, requests 2'"
 ok "jekyll config, layout, feed" "grep -q 'jekyll-feed' $OUT/_config.yml && grep -q 'feed_meta' $OUT/_layouts/default.html"
 ok "reports are posts, newest first by filename" "[ -f $OUT/_posts/2026-11-03-2026-11-03-1800-evening.md ] && [ -f $OUT/_posts/2026-11-04-2026-11-04-0600-morning.md ]"
-ok "questions issue linked from the report" "grep -q 'issues/7' $OUT/_posts/2026-11-03-*evening.md"
+ok "private copy linked from the report" "grep -q 'issues/7' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Questions for the Investors' $OUT/_posts/2026-11-03-*evening.md"
 ok "private repo links scrubbed in reports" "! grep -q 'github.com/test/company/commit' $OUT/_posts/2026-11-03-*evening.md && grep -q '(private)' $OUT/_posts/2026-11-03-*evening.md"
-ok "the questions issue link itself survives (Investors need it)" "grep -c 'github.com/test/company/issues/7' $OUT/_posts/2026-11-03-*evening.md | grep -q 1"
+ok "the private copy link itself survives (Investors need it)" "grep -c 'github.com/test/company/issues/7' $OUT/_posts/2026-11-03-*evening.md | grep -q 1"
 ok "tokens removed everywhere" "! grep -rq 'ghp_abc\|github_pat_11' $OUT"
 ok "liquid braces are wrapped in raw" "grep -q '{% raw %}' $OUT/_posts/2026-11-03-*evening.md"
 ok "cast index has active and former" "grep -q 'Working here now' $OUT/cast/index.md && grep -q 'Former workers' $OUT/cast/index.md && grep -q 'cast/olga.html' $OUT/cast/index.md"

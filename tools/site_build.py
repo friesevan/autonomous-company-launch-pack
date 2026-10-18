@@ -9,7 +9,7 @@ scratch on every run (everything in --out except .git and CNAME is replaced).
 
 What it reads (the data contract; the Handbook may not change these shapes):
   site.json                 company name, tagline, repo, site URL, options
-  reports/*.md              front matter: title, number, day, date, time, kind, questions_issue
+  reports/*.md              the public report, without its questions; front matter: title, number, day, date, time, kind, issue
   story/*.md                front matter: title, date, time, kind, workers (comma list)
   personnel/registry.json   [{name, role, manager, status, salary, career_goal, joined, left, bio}]
   personnel/portraits/*.svg one per worker
@@ -388,9 +388,9 @@ def build(out, use_gh=True):
         head = {"layout": "default", "title": r["title"], "date": f"{r['when']}:00", "kind": kind,
                 "day": r.get("day"), "number": r.get("number")}
         extra = ""
-        if r.get("questions_issue"):
-            extra = (f"\n\n> **For the Investors:** this report asks questions. Reply on "
-                     f"[its GitHub issue]({r['questions_issue']}) by the deadline stated with each one.\n")
+        if r.get("issue"):
+            extra = (f"\n\n> **Investors:** this report's private copy, with its Questions for the Investors, is "
+                     f"[on GitHub]({r['issue']}). Answer there by midnight.\n")
         site.write(os.path.join("_posts", f"{r['date']}-{r['slug']}.md"), fm(head) + extra + "\n" + raw(r["body"]))
 
     # Index: scoreboard + report list
@@ -519,7 +519,7 @@ def build(out, use_gh=True):
     if requests is None:
         rq += ["Open requests are listed here when the site is built on the company's Mac mini.", ""]
     else:
-        labels = {"emergency": "Emergency", "urgent": "Urgent request", "report": "Questions from a report", "pitch": "The Pitch"}
+        labels = {"emergency": "Emergency", "urgent": "Urgent request", "report": "A report's questions", "pitch": "The Pitch"}
         if requests:
             rq += ["Open items, most urgent first. Each one is answered on its GitHub issue, which only the Investors can see.", "",
                    "| | Request | Opened | Replies |", "| --- | --- | --- | --- |"]

@@ -30,7 +30,7 @@ The repository is private. Its owner adds the other Investor under **Settings > 
 | Days 7, 14, 21, 28 | Weekly report inside the evening report | The company |
 | Day 30 | The Final Report, with every worker's testimony, and one of three endings: Continue, Request for More Funding, or File for Bankruptcy | The company proposes; Investors decide |
 
-Reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. Each report carries the company's usage figures and, when there is anything to ask, a For the Investors section, answered on a GitHub issue linked from the report. Between reports the site's cast pages, log, usage, and open requests update after every run. The Investors can message the company at any time through a GitHub issue.
+Reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. Each report carries the company's usage figures and ends with its Questions for the Investors, answered on the report's private copy, a GitHub issue linked from it; the public site never shows the questions. Between reports the site's cast pages, log, usage, and open requests update after every run. The Investors can message the company at any time through a GitHub issue.
 
 ## The gate (before Day 1)
 

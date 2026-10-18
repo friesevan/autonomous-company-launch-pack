@@ -39,7 +39,7 @@ The loop ships in `tools/`, tested. Day 1 installs it; it is not built from scra
 2. **Sync.** `git pull --ff-only`, so Investor edits to `CLAUDE.md`, the rules, or the allowlist take effect on the next tick.
 3. **Inbox.** `tools/inbox_check.sh` asks GitHub for issues and comments since the last check, from allowlisted accounts, ignoring the company's own; if there are any, it creates `ops/inbox_pending`.
 4. **Decide.** `tools/governor.py decide` returns one of:
-    - `evening`, `weekly` (Days 7, 14, 21, 28), or `final` (Day 30): due at 6:00 p.m. and not yet done today; the narrative pass, the report, and its questions issue.
+    - `evening`, `weekly` (Days 7, 14, 21, 28), or `final` (Day 30): due at 6:00 p.m. and not yet done today; the narrative pass, the report, and its private copy.
     - `morning`: due between 6:00 a.m. and noon, only if an evening report exists from an earlier day and `tools/quiet_night.py` found activity since it. A quiet night marks the morning as skipped and moves on.
     - `queue`: a usage limit was hit and its pause hasn't ended, Claude Code was found logged out within the last hour, or today's share of the weekly budget is spent. The supervisor runs `tools/run_queue.sh` instead of Claude.
     - `skip`: nothing to do: no open task on the board, no pending Investor message, and a work session ran within the last hour. If the week is behind pace, a `work` session with `backlog` runs instead (at most every two hours), and the CEO refills the board (Tenet 7).
@@ -56,7 +56,7 @@ The loop ships in `tools/`, tested. Day 1 installs it; it is not built from scra
 | --- | --- | --- | --- | --- | --- |
 | `work` | `work.md` | sonnet | medium | 40 | Dispatching and bookkeeping; workers do the hard thinking on the model each task needs (Tenet 6) |
 | `morning` | `morning.md` | haiku | low | 20 | A report assembled from the event log |
-| `evening` | `evening.md` | sonnet | low | 30 | The report, its For the Investors section and questions issue; diaries on Haiku |
+| `evening` | `evening.md` | sonnet | low | 30 | The report, its Questions for the Investors, and its private copy; diaries on Haiku |
 | `weekly` | `evening.md` | sonnet | medium | 45 | The evening report plus "Week N in review" |
 | `final` | `evening.md` | opus | high | 70 | The Final Report on Day 30; testimonies on Sonnet, the verdict on Fable |
 
@@ -207,7 +207,7 @@ All channels are GitHub issues in `company`, created and read with `gh` as the c
 
 | Channel | Mechanism |
 | --- | --- |
-| A report's questions | When a report's For the Investors section (Commandment 55) has anything in it: `gh issue create --label report --title "Report N — questions (Day D)"` with that section verbatim plus any private details, linking the report; the issue URL goes in the report's `questions_issue` front matter, so the site links it. No section, no issue. |
+| Report questions | Every report's private copy: `gh issue create --label report --title "Report N — Day D — YYYY-MM-DD"` with the full report followed by its Questions for the Investors (Commandment 55), linking the public report; the issue URL goes in the report's `issue` front matter. The public report file is saved without the questions, so the site never shows them. |
 | Emergency | `gh issue create --label emergency` with both Investors @mentioned in the body. Sent at once, at any hour, never limited (Commandment 53). |
 | Urgent Request | `gh issue create --label urgent` with both Investors @mentioned in the body, for anything that shouldn't wait for the next report. Held during quiet hours (10 p.m. to 8 a.m.); about 5 a day at most, as a guide. |
 | The Pitch | `gh issue create --label pitch` with `pitches/PITCH.md` as the body, linked from the report. |
@@ -215,7 +215,7 @@ All channels are GitHub issues in `company`, created and read with `gh` as the c
 | **Inbound, at any time** | Every tick, `tools/inbox_check.sh` asks GitHub (no Claude) for issues and comments since `inbox_last_check` in `ops/state.json`, from allowlisted accounts only, ignoring the company's own account, and creates `ops/inbox_pending` if there are any. The next session reads them first: `gh api repos/<org>/company/issues/comments?since=<ts>` and the new issues, filtered by `investors/allowlist.md`. Each kept message gets an acknowledging reply, is acted on in that run, and is listed in the next report under Human help; the Operator then updates `inbox_last_check` and deletes the marker. `PAUSE` or `STOP` in a message halts work at once. |
 | Amendments | A message that changes a rule or a standing decision is copied verbatim, with its date, link, and the Commandments it affects, into `amendments.md` (format in that file). It reaches the Operator through `CLAUDE.md`'s import and every worker through `build_agents.py`. |
 | Closing | The Operator closes an issue once every question in it is answered or the request is done, linking the result. |
-| Reports | Written into `reports/` with the front matter in `setup/SITE.md`. The site generator publishes them, with the cast, the log, usage, requests, and the pages (section 13). |
+| Reports | Written into `reports/` without their questions, with the front matter in `setup/SITE.md`. The site generator publishes them, with the cast, the log, usage, requests, and the pages (section 13). |
 | Commandment changes | Only the Investors commit `CLAUDE.md`. The Operator notices a new version in `git log`, notes it in the next report, and follows it from that run. |
 | Optional push layer | If GitHub's @mention notifications prove unreliable, the Operator may propose ntfy.sh (free, one HTTP POST per notification) in a report. |
 | Answering from the site | The site's Requests page lists every open issue with a link, and "Message the company" opens a prefilled new issue; replies themselves happen on GitHub (`setup/SITE.md` explains why a static site can't post safely). |
@@ -226,7 +226,7 @@ All channels are GitHub issues in `company`, created and read with `gh` as the c
 
 The Commandment 39 structure, 800 to 1,500 words plus excerpts, written on Haiku in the morning and on Sonnet in the evening, from `log/events.jsonl` (`python3 tools/events.py since <time>`), the commits, the board, the ledger, and only the records in `story/` it quotes. It reads the event log first and opens nothing else unless it needs it. Two sections come from tools rather than prose: **Usage** is the output of `python3 tools/governor.py report-usage` (the 5-hour window, today, the week, Fable, and the split by model, each against its calibrated limit), and the scoreboard's numbers go into `ops/scoreboard.json` for the site's home page.
 
-**For the Investors** (Commandment 55) replaces the old Daily Brief. It appears only when there is something to ask, in the fixed order, and the same text goes into one `report` issue where the Investors answer; details that must stay private (account specifics, anything an Investor asked to keep off the site) appear only in the issue. The evening report's questions default at midnight, the morning report's at 6:00 p.m. A report is saved with the front matter the site expects (`setup/SITE.md`): `title`, `number`, `day`, `date`, `time`, `kind`, and `questions_issue` when there is one.
+**Questions for the Investors** (Commandment 55) replace the old Daily Brief. They close every report in the fixed order, one line when there is nothing to ask. Every report gets a private copy: one `report` issue with the full report and the questions, where the Investors answer by midnight. The public report file is saved without the questions, with the front matter the site expects (`setup/SITE.md`): `title`, `number`, `day`, `date`, `time`, `kind`, and `issue`.
 
 **Quiet nights.** At 6:00 a.m., the governor runs `tools/quiet_night.py` against the time of the last evening report. It checks, without Claude, for commits other than the supervisor's own, new event-log lines, a pending Investor message, and failed runs. If there are none, the morning report is skipped, the skip is noted in `ops/state.json`, and the evening report covers both periods (Commandment 37). A morning report is never produced before the first evening report exists.
 
@@ -325,7 +325,7 @@ The Operator reports setup finished, and writes the first report, only when all 
 - [ ] `python3 rules/lookup.py 9` prints Commandment 9.
 - [ ] The issue labels exist (`report`, `urgent`, `emergency`, `pitch`, `directive`), `tools/quiet_night.py` and `tools/inbox_check.sh` run without error, and a test issue was created, detected by the inbox check, acknowledged, and closed.
 - [ ] `site.json`, `personnel/registry.json`, `ops/scoreboard.json`, and `site/pages/` exist; the `site` repository is cloned at `../site`; `tools/site_publish.sh` built and pushed it; and GitHub Pages shows the home page, the cast, the log, the usage page, and the Requests page.
-- [ ] The first report is published, with the CEO's persona and portrait, the site and the portrait style for approval, the calibrated budgets, and anything that blocked setup, and its questions issue is open.
+- [ ] The first report is published, with the CEO's persona and portrait, the site and the portrait style for approval, the calibrated budgets, and anything that blocked setup, and its private copy is open.
 
 ## 11. Keeping runs cheap
 
@@ -371,7 +371,7 @@ Estimates for a typical day of the build, from the same model (Claude Code's own
 | Item | Model | Per day: processed (written) | Cost per day | 30 days |
 | --- | --- | --- | --- | --- |
 | Morning report (skipped after quiet nights) | Haiku | 0.45M (4k) | $0.02 | $0.5 |
-| Evening report, with its For the Investors section | Sonnet | 0.84M (10k) | $0.39 | $11.3 |
+| Evening report, with its Questions for the Investors | Sonnet | 0.84M (10k) | $0.39 | $11.3 |
 | Weekly review, Days 7/14/21/28 (extra) | Sonnet | 0.86M (14k) each | | $1.3 |
 | Final Report, 7 testimonies, the verdict | Opus, Sonnet, Fable | 6.0M (103k) once | | $5.9 |
 | Diaries and small talk: 5 diaries, 2 exchanges | Haiku | 0.57M (8k) | $0.09 | $2.6 |
