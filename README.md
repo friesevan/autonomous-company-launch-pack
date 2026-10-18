@@ -22,7 +22,7 @@ The repository is private. Its owner adds the other Investor under **Settings > 
 | When | What happens | Who |
 | --- | --- | --- |
 | Before Day 1 | The Setup Guide: hardware, macOS, software, Apple, GitHub. The gate must be fully passed. | Investors |
-| Day 1 | The company sets itself up: the CEO, the Handbook, the run loop, the channels, the site. First Daily Brief at 6 p.m. | The company |
+| Day 1 | The company sets itself up: the CEO, the Handbook, the run loop, the channels, the site. First report at 6 p.m. | The company |
 | Day 2 (target) | The Pitch: the top product candidates, presented to the Investors | The company; Investors choose |
 | Days 3 to about 16 | Build, TestFlight builds to the Investors, press kit and launch plan drafted | The company; Investors test |
 | About Day 17 | App Store submission; App Review usually takes 1 to 3 days | The company |
@@ -30,7 +30,7 @@ The repository is private. Its owner adds the other Investor under **Settings > 
 | Days 7, 14, 21, 28 | Weekly report inside the evening report | The company |
 | Day 30 | The Final Report, with every worker's testimony, and one of three endings: Continue, Request for More Funding, or File for Bankruptcy | The company proposes; Investors decide |
 
-Reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. The Daily Brief, where the company asks the Investors its questions, posts at 6 p.m. as a GitHub issue. The Investors can message the company at any time the same way.
+Reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. Each report carries the company's usage figures and, when there is anything to ask, a For the Investors section, answered on a GitHub issue linked from the report. Between reports the site's cast pages, log, usage, and open requests update after every run. The Investors can message the company at any time through a GitHub issue.
 
 ## The gate (before Day 1)
 
@@ -65,12 +65,14 @@ Day 1 does not start until all five are true. Setup time on Day 1 counts toward 
 | `rules/hooks/model-guard.py` | Refuses Fable once its weekly allowance is used, and keeps diaries and small talk on Haiku | Investors |
 | `setup/APPLE.md` | Setting Up Apple Developer Account: who owns it, which Apple Account goes where, the steps | Investors |
 | `setup/INVESTORS.md` | The Setup Guide | Investors |
+| `setup/SITE.md` | The site: pages, data contract, how it updates, answering on GitHub | Investors |
 | `setup/OPERATIONS.md` | The Operations Guide | Investors |
 | `investors/allowlist.md` | GitHub usernames whose messages count as instructions | Investors |
 | `.claude/settings.json` | Permission allow and deny rules, the two hooks, subagent limits | Investors |
 | `ops/prompts/day1.md` | The first prompt | Investors |
 | `ops/prompts/work.md`, `morning.md`, `evening.md` | The fixed prompts for each session type | The company may improve |
 | `tools/supervisor.sh`, `governor.py`, `inbox_check.sh`, `quiet_night.py`, `run_queue.sh`, `events.py`, `xc.sh`, `install-launchd.sh` | The run loop and usage governor, tested and ready to install on Day 1 | The company may improve |
+| `tools/site_build.py`, `tools/site_publish.sh` | The public site generator and publisher, tested | The company may improve |
 | `ops/launchd/` | The LaunchAgent template (every 15 minutes) | The company may improve |
 | `tests/run.sh`, `tests/*_test.sh`, stand-ins | 72 checks of the run loop, governor, and model guard, run with a stand-in `claude` and `gh` | The company may improve |
 | `.gitignore`, `ops/queue/README.md` | Housekeeping | The company may improve |

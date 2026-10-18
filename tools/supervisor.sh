@@ -44,7 +44,7 @@ REASON="$(printf '%s' "$DECISION" | jq -r .reason)"
 log "$RUN: $REASON"
 case "$RUN" in
   skip) exit 0 ;;
-  queue) [ -x tools/run_queue.sh ] && tools/run_queue.sh; exit 0 ;;
+  queue) [ -x tools/run_queue.sh ] && tools/run_queue.sh; [ -x tools/site_publish.sh ] && tools/site_publish.sh >>"$LOG" 2>&1; exit 0 ;;
 esac
 
 # 5. Prepare the session: the run record it reads, and the workers it can call.
@@ -111,10 +111,12 @@ fi
 [ "$(field auth_failed)" = "true" ] && alert_logged_out
 find ops/runs -name '*.jsonl' -mtime +7 -exec rm -f {} + 2>/dev/null
 
-# 7. Commit anything the session left behind, as the Operator, and push.
+# 7. Commit anything the session left behind, as the Operator, and push. Then
+#    rebuild the public site from the records (no Claude) and push that too.
 if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
   git add -A
   git -c user.name=Operator -c user.email=operator@company commit -q -m "ops: $RUN run $(date +%Y-%m-%d\ %H:%M)" \
     && { git remote get-url origin >/dev/null 2>&1 && git push -q 2>>"$LOG" || true; }
 fi
+[ -x tools/site_publish.sh ] && tools/site_publish.sh >>"$LOG" 2>&1
 exit "$CODE"

@@ -10,6 +10,8 @@ Subcommands:
   set-day1 [YYYY-MM-DD]              record Day 1 (default: today, Eastern)
   set-budget <usd>                   set weekly_budget_usd (calibrate on Day 1 against /usage)
   set-fable-budget <usd>             set fable_budget_usd (the Fable meter in /usage)
+  set-5h-budget <usd>                set five_hour_budget_usd (the 5-hour meter in /usage)
+  report-usage [--now ISO]           print the "Usage" block for a report (Markdown)
   set-anchor <ISO>                   align the pacing week with the plan's weekly reset
   mark-limit <hours> [--now ISO]     pause Claude sessions for N hours by hand
   status [--json] [--now ISO]        one-screen summary (or JSON for the weekly review)
@@ -81,6 +83,7 @@ USAGE_DEFAULTS = {
     "reserve_fraction": 0.10,
     "fable_fraction": 0.5,
     "fable_budget_usd": None,
+    "five_hour_budget_usd": None,
     "probe_step": 0.10,
     "week_closed_until": None,
     "weeks": [],
@@ -230,6 +233,12 @@ def category_shares(usage, now, days=7):
     return total, {c: (round(v / total, 4) if total else 0.0) for c, v in totals.items()}
 
 
+def window_spend(usage, now, hours):
+    """Spend in the last `hours`, from the recorded runs."""
+    since = now - dt.timedelta(hours=hours)
+    return sum(float(r.get("cost_usd", 0.0)) for r in usage.get("runs", []) if parse_now(r["at"]) > since)
+
+
 def fable_budget(usage):
     calibrated = usage.get("fable_budget_usd")
     if calibrated:
@@ -364,8 +373,8 @@ def decide(args):
     # Reports first. They are exempt from the daily share but not from a limit hit.
     if now.hour >= 18 and state.get("last_evening_date") != today:
         kind = "final" if day == 30 else "weekly" if day in (7, 14, 21, 28) else "evening"
-        return session(kind, base, pace, usage, weekly=kind == "weekly", final=kind == "final", brief=True,
-                       reason="evening report and Daily Brief are due")
+        return session(kind, base, pace, usage, weekly=kind == "weekly", final=kind == "final", questions=True,
+                       reason="evening report is due")
 
     last_evening = state.get("last_evening_at")
     morning_due = (6 <= now.hour < 12 and state.get("last_morning_date") != today
@@ -377,7 +386,7 @@ def decide(args):
             save(STATE, state)
             base["morning_skipped"] = True
         else:
-            return session("morning", base, pace, usage, weekly=False, final=False, brief=False,
+            return session("morning", base, pace, usage, weekly=False, final=False, questions=False,
                            reason="morning report is due and the night was not quiet")
 
     if not pace["work_allowed"]:
@@ -392,12 +401,12 @@ def decide(args):
         if base["upgrade"] and not (last_backlog and now - parse_now(last_backlog) < dt.timedelta(minutes=BACKLOG_MINUTES)):
             state["last_backlog_at"] = now.isoformat()
             save(STATE, state)
-            return session("work", base, pace, usage, weekly=False, final=False, brief=False, backlog=True,
+            return session("work", base, pace, usage, weekly=False, final=False, questions=False, backlog=True,
                            open_tasks=0, inbox_pending=False,
                            reason="the board is empty but the week is behind pace: refill it with improvements")
         return {**base, "run": "skip", "reason": "nothing to do: no open tasks, no new messages, a session ran recently"}
 
-    return session("work", base, pace, usage, weekly=False, final=False, brief=False,
+    return session("work", base, pace, usage, weekly=False, final=False, questions=False,
                    open_tasks=tasks, inbox_pending=inbox, reason="work session")
 
 
@@ -604,6 +613,50 @@ def set_fable_budget(args):
     print(f"fable_budget_usd = {usage['fable_budget_usd']}")
 
 
+def set_5h_budget(args):
+    usage = load(USAGE, USAGE_DEFAULTS)
+    usage["five_hour_budget_usd"] = float(args.usd)
+    save(USAGE, usage)
+    print(f"five_hour_budget_usd = {usage['five_hour_budget_usd']}")
+
+
+def report_usage(args):
+    """The Usage section of a report: every window the plan meters, by model, as Markdown."""
+    now = parse_now(args.now)
+    usage = load(USAGE, USAGE_DEFAULTS)
+    state = load(STATE, STATE_DEFAULTS)
+    pace = pacing(usage, state, now)
+    fable = fable_status(usage, state, now)
+    five_h = window_spend(usage, now, 5)
+    five_budget = usage.get("five_hour_budget_usd")
+    start, end = week_window(usage, state, now)
+    by_model = {}
+    for day, models in usage.get("models", {}).items():
+        if in_window(day, start, end):
+            for m, v in models.items():
+                by_model[m] = by_model.get(m, 0.0) + float(v)
+    total_week = sum(by_model.values()) or pace["used_week_usd"]
+    pct = lambda used, budget: f"{used / budget:.0%}" if budget else "not calibrated"
+    lines = ["| Window | Used | Of | Share |", "| --- | --- | --- | --- |",
+             f"| Last 5 hours | ${five_h:.2f} | ${float(five_budget):.2f} | {pct(five_h, five_budget)} |" if five_budget
+             else f"| Last 5 hours | ${five_h:.2f} | not calibrated | |",
+             f"| Today | ${pace['today_used_usd']:.2f} | ${pace['today_share_usd']:.2f} (today's share) | {pct(pace['today_used_usd'], pace['today_share_usd'])} |",
+             f"| This week (resets {end:%a %b %-d, %-I:%M %p}) | ${pace['used_week_usd']:.2f} | ${pace['budget_usd']:.2f} | {pct(pace['used_week_usd'], pace['budget_usd'])} |",
+             f"| Fable this week | ${fable['fable_week_usd']:.2f} | ${fable['fable_allowance_usd']:.2f} | {pct(fable['fable_week_usd'], fable['fable_allowance_usd'])} |",
+             "", "| Model | This week | Share |", "| --- | --- | --- |"]
+    for m in ("fable", "opus", "sonnet", "haiku"):
+        v = by_model.get(m, 0.0)
+        lines.append(f"| {m.capitalize()} | ${v:.2f} | {v / total_week:.0%} |" if total_week else f"| {m.capitalize()} | ${v:.2f} | |")
+    notes = []
+    if until_active(usage, "rate_limit_until", now):
+        notes.append(f"Sessions paused until {parse_now(usage['rate_limit_until']):%a %-I:%M %p} (limit reached).")
+    if not fable["fable_ok"]:
+        notes.append("Fable is paused until the week resets.")
+    if notes:
+        lines += [""] + notes
+    print("\n".join(lines))
+
+
 def set_anchor(args):
     usage = load(USAGE, USAGE_DEFAULTS)
     usage["week_anchor"] = parse_now(args.when).isoformat()
@@ -633,7 +686,11 @@ def status(args):
     for models in usage.get("models", {}).values():
         for m, v in models.items():
             by_model[m] = by_model.get(m, 0.0) + float(v)
+    five_h = window_spend(usage, now, 5)
+    five_budget = usage.get("five_hour_budget_usd")
     out = {"now": now.isoformat(), "day": day_number(state, now), "pacing": pace, **signals,
+           "window_5h_usd": round(five_h, 4), "five_hour_budget_usd": five_budget,
+           "window_5h_share": round(five_h / float(five_budget), 4) if five_budget else None,
            "caps": usage.get("caps"), "all_time_by_category_usd": {k: round(v, 2) for k, v in totals.items()},
            "all_time_by_model_usd": {k: round(v, 2) for k, v in by_model.items()},
            "weeks": usage.get("weeks", [])[-5:], "limit_hits": usage.get("limit_hits", [])[-5:],
@@ -673,6 +730,8 @@ def main():
     s = sub.add_parser("set-day1"); s.add_argument("date", nargs="?"); s.set_defaults(fn=set_day1)
     s = sub.add_parser("set-budget"); s.add_argument("usd"); s.set_defaults(fn=set_budget)
     s = sub.add_parser("set-fable-budget"); s.add_argument("usd"); s.set_defaults(fn=set_fable_budget)
+    s = sub.add_parser("set-5h-budget"); s.add_argument("usd"); s.set_defaults(fn=set_5h_budget)
+    s = sub.add_parser("report-usage"); s.add_argument("--now"); s.set_defaults(fn=report_usage)
     s = sub.add_parser("set-anchor"); s.add_argument("when"); s.set_defaults(fn=set_anchor)
     s = sub.add_parser("mark-limit"); s.add_argument("hours"); s.add_argument("--now"); s.set_defaults(fn=mark_limit)
     s = sub.add_parser("status"); s.add_argument("--json", action="store_true"); s.add_argument("--now")
