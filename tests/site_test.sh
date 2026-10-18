@@ -55,6 +55,7 @@ time: 18:20
 kind: diary
 workers: maya
 mood: 4
+feeling: Relieved
 mood_reason: The build finally works.
 ---
 Dear diary. The build works. https://github.com/test/company/issues/3 was annoying.
@@ -67,6 +68,7 @@ time: 18:10
 kind: diary
 workers: maya
 mood: 2
+feeling: Frustrated
 mood_reason: Nothing compiles yet.
 ---
 First day. Nothing compiles.
@@ -119,10 +121,11 @@ ok "worker page: profile, activity, diary, memory scrubbed" "grep -q 'Lead the n
 ok "every worker gets an animated portrait; still copies kept" "grep -q 'portraits/maya.svg' $OUT/cast/maya.md && [ -f $OUT/assets/portraits/ceo.svg ] && [ -f $OUT/assets/portraits/still/maya.svg ] && grep -q animateTransform $OUT/assets/portraits/ceo.svg"
 ok "portrait: reduced-motion rule and a still fallback inside" "grep -q 'prefers-reduced-motion' $OUT/assets/portraits/maya.svg && grep -q 'class=\"still\"' $OUT/assets/portraits/maya.svg"
 ok "temperament changes the motion (restless = rotate)" "grep -q 'type=\"rotate\"' $OUT/assets/portraits/maya.svg && ! grep -q 'type=\"rotate\"' $OUT/assets/portraits/olga.svg || grep -q 'type=\"rotate\"' $OUT/assets/portraits/maya.svg"
-ok "mood: faces on the cast, latest mood and sparkline on the worker page" "grep -c 'class=\"face\"' $OUT/cast/index.md | grep -qv '^0' && grep -q 'The build finally works' $OUT/cast/maya.md && grep -q 'class=\"spark\"' $OUT/cast/maya.md && grep -q 'Mood, from the diaries' $OUT/cast/maya.md"
-ok "no diary: neutral faded face" "grep -q 'no mood recorded yet' $OUT/cast/ceo.md && grep -q 'opacity:.45' $OUT/cast/ceo.md"
+ok "mood: color-coded words on the cast, the worker's own word and reason on their page, sparkline" "grep -q 'mood-word lv4\">Relieved' $OUT/cast/index.md && grep -q 'The build finally works' $OUT/cast/maya.md && grep -q 'class=\"spark\"' $OUT/cast/maya.md && grep -q 'Mood, from the diaries' $OUT/cast/maya.md && grep -q 'Frustrated' $OUT/cast/maya.md"
+ok "no diary: says so, no made-up mood" "grep -q 'No mood recorded yet' $OUT/cast/ceo.md && ! grep -q 'mood-word lv[1-5]' $OUT/cast/ceo.md"
+ok "no faces anywhere (moods are words)" "! grep -rq 'class=\"face\"' $OUT"
 ok "home: tiles, pipeline hero pre-launch, no revenue chart yet" "grep -q 'class=\"tiles\"' $OUT/index.md && grep -q 'class=\"pipe\"' $OUT/index.md && grep -q 'li class=\"now\"><span class=\"dot\"></span><span class=\"lbl\">Build' $OUT/index.md && ! grep -q 'net proceeds by day' $OUT/index.md && grep -q 'team morale' $OUT/index.md"
-ok "report: progress strip with day track, money bar, usage bar, team face" "grep -q 'class=\"strip\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'class=\"track\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Net proceeds' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Team morale that day: good' $OUT/_posts/2026-11-03-*evening.md"
+ok "report: progress strip with day track, money bar, usage bar, team face" "grep -q 'class=\"strip\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'class=\"track\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Net proceeds' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Team morale that day:' $OUT/_posts/2026-11-03-*evening.md && grep -q 'mood-word lv4\">Good' $OUT/_posts/2026-11-03-*evening.md"
 ok "usage: progress bars and the stacked category bar" "grep -q 'class=\"bar-fill\"' $OUT/usage.md && grep -q 'Fable this week' $OUT/usage.md && grep -q 'class=\"stack\"' $OUT/usage.md"
 ok "story page links its worker" "grep -q 'cast/maya.html' $OUT/story/2026-11-03-maya-diary.md && grep -q '(private)' $OUT/story/2026-11-03-maya-diary.md"
 ok "combined log newest first, pipes escaped, json export" "head -20 $OUT/log/index.md | grep -q 'Tests green' && grep -q '12/12' $OUT/log/index.md && grep -q '\\\\|' $OUT/log/index.md && python3 -c 'import json; d=json.load(open(\"$OUT/log/events.json\")); assert len(d)==3 and d[0][\"type\"]==\"test\"'"

@@ -6,14 +6,14 @@
 
 The output is a Jekyll site that GitHub Pages renders on push. It is rebuilt from
 scratch on every run (everything in --out except .git and CNAME is replaced). Every
-chart, bar, face, and portrait is inline SVG drawn here by code (Commandment 9).
+chart, bar, and portrait is inline SVG drawn here by code (Commandment 9); moods are words, color-coded.
 
 What it reads (the data contract; the Handbook may add fields but not rename these):
   site.json                 company name, tagline, repo, site URL, options
   reports/*.md              the public report, without its questions; front matter: title, number,
                             day, date, time, kind, issue; optionally revenue_usd, spent_usd
   story/**/*.md             front matter: title, date, time, kind, workers (comma list);
-                            a diary also carries mood (1-5) and mood_reason
+                            a diary also carries mood (1-5), feeling (one word), and mood_reason
   personnel/registry.json   [{name, role, manager, status (active|candidate|former), salary,
                             career_goal, joined, left, bio, temperament, round}]
   personnel/portraits/*.svg the still portraits (tools/portrait.py draws the animated ones here)
@@ -180,23 +180,16 @@ def bar(label, value, maxv, note="", fmt="${:,.2f}", cls=None):
             f'<div class="bar-track"><div class="bar-fill" style="width:{width:.1f}%"></div></div></div>')
 
 
-def face(level, size=28, title=None):
-    """A code-drawn face for a mood level 1..5 (None = unknown, drawn neutral and faded)."""
+def mood_chip(level, word=None, reason=None, big=False):
+    """The worker's own feeling as a color-coded word, then the reason. Level 1..5 sets the color."""
     known = level in (1, 2, 3, 4, 5)
-    lv = level if known else 3
-    hue = {1: 8, 2: 28, 3: 48, 4: 95, 5: 140}[lv]
-    curve = {1: -9, 2: -4, 3: 0, 4: 5, 5: 9}[lv]
-    y = 21 if curve >= 0 else 23
-    mouth = f"M 10 {y} Q 16 {y + curve} 22 {y}"
-    brow = ('<path d="M 8 11 L 13 13 M 24 11 L 19 13" stroke="#2b2b2b" stroke-width="1.6" stroke-linecap="round" fill="none"/>'
-            if lv == 1 else "")
-    eyes = ('<circle cx="11.5" cy="14" r="1.6" fill="#2b2b2b"/><circle cx="20.5" cy="14" r="1.6" fill="#2b2b2b"/>' if lv != 5
-            else '<path d="M 9.5 14.5 Q 11.5 12 13.5 14.5 M 18.5 14.5 Q 20.5 12 22.5 14.5" stroke="#2b2b2b" stroke-width="1.6" fill="none" stroke-linecap="round"/>')
-    t = title or (MOOD_WORDS[lv] if known else "no mood recorded yet")
-    faded = "" if known else ' style="opacity:.45"'
-    return (f'<svg class="face" width="{size}" height="{size}" viewBox="0 0 32 32" role="img" aria-label="{esc(t)}"{faded}><title>{esc(t)}</title>'
-            f'<circle cx="16" cy="16" r="15" fill="hsl({hue},70%,62%)"/>{eyes}{brow}'
-            f'<path d="{mouth}" stroke="#2b2b2b" stroke-width="2" fill="none" stroke-linecap="round"/></svg>')
+    lv = level if known else 0
+    text = (word or MOOD_WORDS.get(level) or "no mood recorded yet")
+    text = text[:1].upper() + text[1:]
+    out = f'<span class="mood-word lv{lv}{" big" if big else ""}">{esc(text)}</span>'
+    if reason:
+        out += f' <span class="mood-why">\u2013 {esc(reason)}</span>'
+    return out
 
 
 def sparkline(values, width=160, height=36, lo=1, hi=5):
@@ -327,6 +320,7 @@ def load_story(scrub):
         if meta["mood"] not in (1, 2, 3, 4, 5):
             meta["mood"] = None
         meta["mood_reason"] = scrub(meta.get("mood_reason", "")) if meta.get("mood_reason") else ""
+        meta["feeling"] = re.sub(r"[^A-Za-z' -]", "", meta.get("feeling", "")).strip().split(" ")[0][:24] if meta.get("feeling") else ""
         out.append(meta)
     out.sort(key=lambda m: m["when"], reverse=True)
     return out
@@ -339,7 +333,7 @@ def moods_by_worker(story):
         if s.get("mood") is None or s.get("kind", "") != "diary":
             continue
         for w in s["workers"]:
-            out.setdefault(w, []).append((s["when"], s["mood"], s["mood_reason"]))
+            out.setdefault(w, []).append((s["when"], s["mood"], s["mood_reason"], s.get("feeling", "")))
     return out
 
 
@@ -456,7 +450,6 @@ h1{font-size:34px;letter-spacing:-.02em;margin:18px 0 8px}h2{font-size:22px;marg
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:0 0 16px}
 .tile{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:14px 16px}.tile b{display:block;font-size:26px;letter-spacing:-.02em}.tile span{font-size:13.5px;color:var(--muted)}
 .tile .bar{margin:6px 0 0}.tile .bar-head{display:none}
-.tile.face-tile{display:flex;align-items:center;gap:12px}.tile.face-tile .face{width:44px;height:44px;flex:none}
 .bar{margin:10px 0}.bar-head{display:flex;justify-content:space-between;font-size:14px;color:var(--muted);margin-bottom:4px}.bar-head span:first-child{color:var(--ink)}
 .bar-track{height:10px;background:var(--line);border-radius:6px;overflow:hidden}.bar-fill{height:100%;background:var(--ok);border-radius:6px;transition:width .4s}
 .bar.warm .bar-fill{background:var(--warm)}.bar.hot .bar-fill{background:var(--hot)}.bar.money .bar-fill{background:var(--accent)}
@@ -474,8 +467,11 @@ h1{font-size:34px;letter-spacing:-.02em;margin:18px 0 8px}h2{font-size:22px;marg
 table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
 img.portrait{width:120px;height:120px;border-radius:16px;float:right;margin:0 0 12px 18px;background:var(--soft)}
 .cast{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}.cast a{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--soft)}
-.cast img{width:100%;aspect-ratio:1;border-radius:12px;display:block;margin-bottom:8px;background:var(--bg)}.cast small{color:var(--muted);display:block}.cast .who{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.cast img{width:100%;aspect-ratio:1;border-radius:12px;display:block;margin-bottom:8px;background:var(--bg)}.cast small{color:var(--muted);display:block}
 .mood{display:flex;align-items:center;gap:12px;margin:8px 0 14px;flex-wrap:wrap}.mood .why{color:var(--muted);font-size:14.5px}.mood .spark{margin-left:auto}
+.mood-word{font-weight:700;padding:1px 8px;border-radius:8px;white-space:nowrap}.mood-word.big{font-size:20px;padding:2px 10px}.mood-why{color:var(--muted)}
+.mood-word.lv0{color:var(--muted);background:var(--line)}.mood-word.lv1{color:#fff;background:#c43d2b}.mood-word.lv2{color:#2b1a00;background:#e59a3a}.mood-word.lv3{color:#2b2400;background:#e7cf4a}.mood-word.lv4{color:#0f2e1a;background:#7fd19a}.mood-word.lv5{color:#082a12;background:#3fbf6e}
+.cast .mood-word{display:inline-block;margin-top:6px;font-size:13px}
 details{margin:12px 0}summary{cursor:pointer}footer{padding:28px 18px 44px;color:var(--muted);font-size:14px}blockquote{border-left:3px solid var(--line);margin:0;padding-left:12px;color:var(--muted)}
 .tag{font-size:12px;padding:1px 7px;border:1px solid var(--line);border-radius:10px;color:var(--muted);white-space:nowrap}
 .reports{list-style:none;padding:0}.reports li{margin:8px 0}.latest{font-size:15px;color:var(--muted);margin:6px 0 0}
@@ -556,7 +552,7 @@ def build(out, use_gh=True):
         day1 = None
 
     def latest_mood(slug):
-        return moods[slug][-1] if moods.get(slug) else (None, None, "")
+        return moods[slug][-1] if moods.get(slug) else (None, None, "", "")
 
     active = [w for w in workers if w["status"] == "active"]
     team_levels = [latest_mood(w["slug"])[1] for w in active if latest_mood(w["slug"])[1]]
@@ -628,11 +624,12 @@ def build(out, use_gh=True):
         rev = num(r.get("revenue_usd"), num(hist_by_date.get(r["date"], {}).get("revenue_usd"), fallback))
         used = num(usage_days.get(r["date"]))
         tm = mood_on(r["date"])
+        team_chip = mood_chip(tm) if tm else '<span class="mood-why">not recorded</span>'
         strip = ['<div class="strip">',
                  f'<div class="row"><span class="tag">Day {rday} of {days_total}</span>{day_track(rday, days_total, launched_day)}</div>',
                  f'<div class="row">{bar("Net proceeds", rev, goal, cls="money")}</div>',
                  f'<div class="row">{bar("Claude usage that day", used, weekly_budget / 7, note=f"${used:,.2f} of a 1/7 share")}</div>',
-                 f'<div class="row">{face(tm, 30)}<span>Team morale that day: {MOOD_WORDS.get(tm, "not recorded")}</span></div>',
+                 f'<div class="row"><span>Team morale that day:</span> {team_chip}</div>',
                  "</div>"]
         head = {"layout": "default", "title": r["title"], "date": f"{r['when']}:00", "kind": kind,
                 "day": r.get("day"), "number": r.get("number")}
@@ -654,10 +651,11 @@ def build(out, use_gh=True):
     # Home: the five things that matter, then the cast, then the reports
     latest = reports[0] if reports else None
     open_count = len(requests) if requests is not None else None
+    team_tile = mood_chip(team_mood, big=True) if team_mood else '<span class="mood-word lv0 big">No diaries yet</span>'
     tiles = [
         f'<div class="tile"><b>${revenue:,.0f}</b><span>of ${goal:,.0f} net proceeds</span>{bar("", revenue, goal, note=" ", cls="money")}</div>',
         f'<div class="tile"><b>{days_left}</b><span>days left · Day {day} of {days_total}</span></div>',
-        f'<div class="tile face-tile">{face(team_mood, 44)}<div><b style="font-size:20px">{MOOD_WORDS.get(team_mood, "no diaries yet").capitalize()}</b><span>team morale, from the latest diaries</span></div></div>',
+        f'<div class="tile"><b>{team_tile}</b><span>team morale, from the latest diaries</span></div>',
         (f'<div class="tile"><b>{open_count}</b><span>waiting on the Investors · <a href="{rel("/requests.html")}">see requests</a></span></div>'
          if open_count is not None else f'<div class="tile"><b>${spent:,.0f}</b><span>real spending so far</span></div>'),
     ]
@@ -672,7 +670,7 @@ def build(out, use_gh=True):
                 f'{day_track(day, days_total, launched_day)}'
                 f'<p class="latest">Day {day} of {days_total}. {status_line}. Revenue starts at launch; ${spent:,.0f} spent so far.</p></div></div>')
     cast_strip = "".join(
-        f'<a href="{rel("/cast/" + w["slug"] + ".html")}">{portrait_img(w["slug"])}<span class="who"><b>{esc(w["name"])}</b>{face(latest_mood(w["slug"])[1], 22)}</span><small>{esc(w.get("role", ""))}</small></a>'
+        f'<a href="{rel("/cast/" + w["slug"] + ".html")}">{portrait_img(w["slug"])}<b>{esc(w["name"])}</b><small>{esc(w.get("role", ""))}</small>{mood_chip(latest_mood(w["slug"])[1], latest_mood(w["slug"])[3]) if latest_mood(w["slug"])[1] else ""}</a>'
         for w in active)
     index = [fm({"layout": "default", "title": "Home", "description": cfg["tagline"]}),
              f"# {cfg['name']}", "", f'<p class="lead">{esc(cfg["tagline"])}</p>', "",
@@ -692,15 +690,15 @@ def build(out, use_gh=True):
     cast = [fm({"layout": "default", "title": "Cast"}), "# The cast", "",
             '<p class="lead">Every worker is an AI-simulated character with a first name, a role, a personality, and a career goal. '
             "Portraits are drawn by code from a mathematical expression seeded by the name, and move in a way chosen by the worker's temperament; "
-            "the face beside each name is the mood from their latest diary.</p>", ""]
+            "the word under each name is the feeling from their latest diary, in their own word.</p>", ""]
     for status, label in STATUS_GROUPS:
         group = [w for w in workers if w["status"] == status or (status == "former" and w["status"] not in ("active", "candidate"))]
         if not group:
             continue
         cast += [f"## {label}", "", '<div class="cast">']
         for w in group:
-            cast.append(f'<a href="{rel("/cast/" + w["slug"] + ".html")}">{portrait_img(w["slug"])}<span class="who"><b>{esc(w["name"])}</b>{face(latest_mood(w["slug"])[1], 22)}</span>'
-                        f'<small>{esc(w.get("role", ""))}</small></a>')
+            cast.append(f'<a href="{rel("/cast/" + w["slug"] + ".html")}">{portrait_img(w["slug"])}<b>{esc(w["name"])}</b><small>{esc(w.get("role", ""))}</small>'
+                        f'{mood_chip(latest_mood(w["slug"])[1], latest_mood(w["slug"])[3]) if latest_mood(w["slug"])[1] else ""}</a>')
         cast += ["</div>", ""]
     site.write(os.path.join("cast", "index.md"), "\n".join(cast))
 
@@ -709,21 +707,21 @@ def build(out, use_gh=True):
         mine = [e for e in events if str(e.get("worker", "")).lower() == slug][:EVENT_LIMIT_PER_WORKER]
         records = [s for s in story if slug in s["workers"]]
         hist = moods.get(slug, [])
-        mwhen, mlevel, mreason = latest_mood(slug)
+        mwhen, mlevel, mreason, mword = latest_mood(slug)
         page = [fm({"layout": "default", "title": w["name"]}), portrait_img(slug, "portrait"), f"# {esc(w['name'])}", "",
                 f"**{esc(w.get('role', ''))}**" + (f" · reports to {esc(w['manager'])}" if w.get("manager") else "")
                 + (f" · {esc(w['status'])}" if w.get("status") != "active" else ""), ""]
         if w.get("bio"):
             page += [scrub(str(w["bio"])), ""]
-        page += [f'<div class="mood">{face(mlevel, 36)}<div><b>{MOOD_WORDS.get(mlevel, "No mood recorded yet").capitalize()}</b>'
-                 + (f'<div class="why">{esc(mreason)}</div>' if mreason else "") + (f'<div class="why">{mwhen}</div>' if mwhen else "") + "</div>"
+        page += [f'<div class="mood"><div>{mood_chip(mlevel, mword, mreason, big=True)}'
+                 + (f'<div class="why">{mwhen}, from their diary</div>' if mwhen else "") + "</div>"
                  + (sparkline([m[1] for m in hist[-30:]]) if len(hist) > 1 else "") + "</div>", ""]
         rows = [("Temperament", f"{w['temperament']}: {TEMPERAMENTS[w['temperament']][3]}"), ("Joined", w.get("joined")), ("Left", w.get("left")),
                 ("Hiring round", w.get("round")), ("Salary (credits, fictional)", w.get("salary")), ("Career goal", w.get("career_goal"))]
         page += ["| | |", "| --- | --- |"] + [f"| {k} | {cell(scrub(str(v)))} |" for k, v in rows if v] + [""]
         if hist:
-            page += ["## Mood, from the diaries", "", "| When | Mood | Why |", "| --- | --- | --- |"]
-            page += [f"| {m[0]} | {face(m[1], 20)} {MOOD_WORDS[m[1]]} | {cell(m[2])} |" for m in reversed(hist[-10:])] + [""]
+            page += ["## Mood, from the diaries", "", "| When | Feeling | Why |", "| --- | --- | --- |"]
+            page += [f"| {m[0]} | {mood_chip(m[1], m[3])} | {cell(m[2])} |" for m in reversed(hist[-10:])] + [""]
         page += [f"## Activity ({len(mine)} most recent)", ""]
         if mine:
             page += ["| When | What | |", "| --- | --- | --- |"]
@@ -745,7 +743,7 @@ def build(out, use_gh=True):
         head = fm({"layout": "default", "title": s["title"]})
         mood_line = ""
         if s.get("mood"):
-            mood_line = f"\n\n{face(s['mood'], 22)} {MOOD_WORDS[s['mood']]}" + (f": {esc(s['mood_reason'])}" if s["mood_reason"] else "")
+            mood_line = "\n\n" + mood_chip(s["mood"], s.get("feeling"), s["mood_reason"])
         site.write(os.path.join("story", s["path"] + ".md"),
                    head + f"# {esc(s['title'])}\n\n*{s['when']}* · {esc(s.get('kind', 'record'))}" + (f" · {who}" if who else "") + mood_line
                    + "\n\n" + raw(s["body"]))

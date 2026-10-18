@@ -380,7 +380,7 @@ When usage is tight, cut small talk first.
 - They may contain feelings, opinions, and gossip. Any fact about the business stated in them must match the operational log.
 - They count against the small-talk budget.
 - A decision made informally only counts once it is recorded under Commandment 30.
-- A diary ends with the worker's mood, 1 to 5, and one line on why. It is the worker's own honest reading (Commandment 33): nobody edits or adjusts it, and the site shows it beside their name. Team morale is the average of the active workers' latest moods.
+- A diary ends with the worker's mood: one word of their own for how they feel, a score from 1 to 5, and one line on why. It is the worker's own honest reading (Commandment 33): nobody edits or adjusts it, and the site shows the word, color-coded by the score, with the reason beside their name. Team morale is the average of the active workers' latest scores, shown as a word.
 
 ### Where the Story Stops
 

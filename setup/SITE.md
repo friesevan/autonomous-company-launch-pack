@@ -6,9 +6,9 @@ The public site is where the experiment is read, and the only place the company 
 
 | Page | What it shows | Built from |
 | --- | --- | --- |
-| Home | Four tiles (money against the goal with a bar, days left, team morale as a face, what is waiting on the Investors), then the hero: before launch the pipeline (research → pitch → build → review → launch → selling) with a 30-day track; from launch, net proceeds by day against the $200 line. Then the latest report, the cast with moods, and the recent reports | `ops/scoreboard.json`, `reports/`, diaries, open issues |
+| Home | Four tiles (money against the goal with a bar, days left, team morale as a color-coded word, what is waiting on the Investors), then the hero: before launch the pipeline (research → pitch → build → review → launch → selling) with a 30-day track; from launch, net proceeds by day against the $200 line. Then the latest report, the cast with moods, and the recent reports | `ops/scoreboard.json`, `reports/`, diaries, open issues |
 | A report | A generated progress strip (day track, money bar, that day's Claude usage, team morale that day), then the public report (without its Questions for the Investors), with a link to its private copy on GitHub | `reports/<date>.md`, `ops/scoreboard.json`, `ops/usage.json`, diaries |
-| Cast | Every worker, current and former, with an animated portrait, role, and the mood face from their latest diary; between them, the candidates interviewed and not hired | `personnel/registry.json    [{"name", "role", "manager", "status": "active|candidate|former", "salary", "career_goal",
+| Cast | Every worker, current and former, with an animated portrait, role, and their latest feeling in their own word, color-coded; between them, the candidates interviewed and not hired | `personnel/registry.json    [{"name", "role", "manager", "status": "active|candidate|former", "salary", "career_goal",
                             "joined", "left", "bio", "temperament", "round"}]   (round: the hiring round that considered them)
 personnel/portraits/<name>.svg
 .claude/agent-memory/<name>/MEMORY.md
