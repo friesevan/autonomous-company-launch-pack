@@ -23,6 +23,8 @@ What it reads (the data contract; the Handbook may add fields but not rename the
                             stage, launched, history: [{date, revenue_usd, spent_usd}]}
   ops/usage.json            through tools/governor.py status --json and report-usage
   site/pages/*.md           about, privacy, support, press: copied with a layout
+  investors/site/           the Investors' controls: settings.json (announcement; publish is read by
+                            site_publish.sh), theme.css, pages/*.md, files/** (copied last, so they win)
   gh (optional)             open issues in the company repo, for the Requests page
 
 Everything published is scrubbed: links into the private company repository become
@@ -39,6 +41,7 @@ import re
 import shutil
 import subprocess
 import sys
+from urllib.parse import urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, "tools")
@@ -172,15 +175,22 @@ def state_class(share):
     return "hot" if share >= 0.9 else "warm" if share >= 0.7 else "ok"
 
 
-def bar(label, value, maxv, note="", fmt="${:,.2f}", cls=None):
+def bar(label, value, maxv, note="", fmt="${:,.2f}", cls=None, show_pct=True):
     """A labelled progress bar. value/maxv as numbers; note replaces the right-hand text."""
     share = (value / maxv) if maxv else 0.0
     width = max(0.0, min(1.0, share)) * 100
     cls = cls or state_class(share)
     right = note if note else (f"{fmt.format(value)} of {fmt.format(maxv)}" if maxv else fmt.format(value))
-    pct = f" · {share:.0%}" if maxv and note != " " else ""
+    pct = f" · {share:.0%}" if maxv and note != " " and show_pct else ""
     return (f'<div class="bar {cls}"><div class="bar-head"><span>{esc(label)}</span><span>{esc(right.strip())}{pct}</span></div>'
             f'<div class="bar-track"><div class="bar-fill" style="width:{width:.1f}%"></div></div></div>')
+
+
+def pct_bar(label, used, limit, of_text, extra=""):
+    """A usage bar as a percentage of a limit only: the plan's limits are percentages, not dollars."""
+    if not limit:
+        return bar(label, 0, 0, note="not calibrated yet", cls="ok")
+    return bar(label, used, limit, note=f"{used / limit:.0%} of {of_text}{extra}", show_pct=False)
 
 
 def mood_chip(level, word=None, reason=None, big=False):
@@ -294,6 +304,7 @@ def when_time(s):
 
 REPORT_GRACE = dt.timedelta(minutes=90)
 PEOPLE_TYPES = {"hire": "joined", "departure": "left", "promotion": "promoted", "demotion": "demoted", "pay": "pay change", "review": "reviewed"}
+STORY_TYPES = ("mood", "interview", "offer", "report")  # the records tell these; reports show the business
 MILESTONE_TYPES = ("hire", "departure", "promotion", "decision", "pitch", "build", "submit", "release", "launch", "sale", "review", "amendment")
 
 
@@ -315,7 +326,7 @@ def rail(events, by_slug, limit=40):
 
 
 def daily_bars(days, values, share, width=640, height=90):
-    """Spend per day as bars against the daily share line."""
+    """Usage per day as bars against the daily pace (a seventh of the weekly limit)."""
     if not days:
         return ""
     top = max(max(values), share, 1.0) * 1.15
@@ -324,41 +335,15 @@ def daily_bars(days, values, share, width=640, height=90):
     y = lambda v: T + (1 - v / top) * (height - T - B)  # noqa: E731
     out = [f'<svg class="chart small" viewBox="0 0 {width} {height}" role="img" aria-label="Claude usage by day">']
     out.append(f'<line x1="{L}" y1="{y(share):.1f}" x2="{width - R}" y2="{y(share):.1f}" stroke="var(--accent)" stroke-dasharray="4 4" opacity=".7"/>')
-    out.append(f'<text x="{L - 4}" y="{y(share) + 4:.1f}" text-anchor="end" class="lbl">1/7</text>')
+    out.append(f'<text x="{L - 4}" y="{y(share) + 4:.1f}" text-anchor="end" class="lbl">pace</text>')
     for i, (d, v) in enumerate(zip(days, values)):
         x0 = L + i * bw + bw * 0.15
         cls = state_class(v / share if share else 0)
-        out.append(f'<rect x="{x0:.1f}" y="{y(v):.1f}" width="{bw * 0.7:.1f}" height="{y(0) - y(v):.1f}" rx="2" class="d-{cls}"><title>{d}: ${v:,.2f}</title></rect>')
+        out.append(f'<rect x="{x0:.1f}" y="{y(v):.1f}" width="{bw * 0.7:.1f}" height="{y(0) - y(v):.1f}" rx="2" class="d-{cls}"><title>{d}: {(v / share if share else 0):.0%} of the daily pace</title></rect>')
         if i % max(1, len(days) // 7) == 0 or i == len(days) - 1:
             out.append(f'<text x="{x0 + bw * 0.35:.1f}" y="{height - 6}" text-anchor="middle" class="lbl">{d[5:]}</text>')
     out.append("</svg>")
     return "".join(out)
-
-
-def people_strip(events, by_slug, variants):
-    items = []
-    for e in reversed(events):
-        t = str(e.get("type", "")).lower()
-        if t not in PEOPLE_TYPES:
-            continue
-        wslug = str(e.get("worker", "")).lower()
-        name = by_slug[wslug]["name"] if wslug in by_slug else e.get("worker", "")
-        img = f'<img src="{rel("/assets/portraits/" + wslug + ".svg")}" alt="">' if wslug in by_slug else ""
-        items.append(f'<a class="person" href="{rel("/cast/" + wslug + ".html")}">{img}<b>{esc(name)}</b><small>{PEOPLE_TYPES[t]}</small></a>')
-    return f'<div class="people">{"".join(items)}</div>' if items else ""
-
-
-def mood_list(story, by_slug, start, end):
-    items = []
-    for s_ in sorted(story, key=lambda m: m["when"]):
-        t = when_time(s_["when"])
-        if s_.get("kind") != "diary" or s_.get("mood") is None or not t or not (start < t <= end):
-            continue
-        for w in s_["workers"]:
-            name = by_slug[w]["name"] if w in by_slug else w
-            items.append(f'<li><a href="{rel("/cast/" + w + ".html")}">{esc(name)}</a>: {mood_chip(s_["mood"], s_.get("feeling"), s_["mood_reason"])} '
-                         f'<a class="mood-why" href="{rel("/story/" + s_["path"] + ".html")}">diary</a></li>')
-    return f'<ul class="moods">{"".join(items)}</ul>' if items else ""
 
 
 def small_multiples(workers, moods, start_day, end_day, day_of):
@@ -495,6 +480,20 @@ def load_config():
         except json.JSONDecodeError:
             print("site.json is not valid JSON; using defaults", file=sys.stderr)
     return cfg
+
+
+INVESTOR_DIR = os.path.join(ROOT, "investors", "site")
+
+
+def load_investor_settings():
+    """The Investors' controls for the site (investors/site/settings.json); site_publish.sh reads publish."""
+    p = os.path.join(INVESTOR_DIR, "settings.json")
+    try:
+        data = json.loads(read(p)) if os.path.exists(p) else {}
+    except json.JSONDecodeError:
+        print("investors/site/settings.json is not valid JSON; ignoring it", file=sys.stderr)
+        data = {}
+    return data if isinstance(data, dict) else {}
 
 
 def load_reports(scrub):
@@ -646,6 +645,9 @@ LAYOUT = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% if page.title %}{{ page.title }} · {% endif %}{{ site.title }}</title>
 <meta name="description" content="{{ page.description | default: site.description }}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{% if page.title %}{{ page.title }} · {% endif %}{{ site.title }}">
+<meta property="og:description" content="{{ page.description | default: site.description }}">
 {% feed_meta %}
 <style>
 :root{--ink:#1b1b1b;--muted:#5f5f5f;--line:#e4e4e4;--bg:#fff;--accent:#2b5bd7;--soft:#f4f5f8;--ok:#2f9e5b;--warm:#d9a21b;--hot:#d9442b;--pink:#c04fb0;--seg:#fff;--portrait:#fff;--blue-bg:#dfe7ff;--blue-fg:#1d3d99;--amber-bg:#fbe3a6;--amber-fg:#4a3200;--green-bg:#d3f0de;--green-fg:#0f4a2a;--pink-bg:#f7d9f0;--pink-fg:#6a1f5e;--grey-bg:#e9eaee;--grey-fg:#3d3f46}
@@ -732,6 +734,9 @@ details{margin:12px 0}summary{cursor:pointer}footer{padding:28px 18px 44px;color
 .subtabs{display:flex;flex-wrap:wrap;gap:4px 22px;margin:20px 0 0;border-bottom:1px solid var(--line)}
 .subtabs a{padding:6px 0 9px;margin-bottom:-1px;border-bottom:3px solid transparent;text-decoration:none;font-weight:600;color:var(--muted)}
 .subtabs a[aria-current]{color:var(--ink);border-bottom-color:var(--accent)}
+.notice.announce{border-color:var(--accent);background:var(--blue-bg);color:var(--blue-fg)}
+.byline{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:15px;color:var(--muted)}.byline img.avatar{width:32px;height:32px}
+.behind{margin:22px 0 0;font-size:15px;color:var(--muted)}
 .reports{list-style:none;padding:0}.reports li{margin:8px 0}.latest{font-size:15px;color:var(--muted);margin:6px 0 0}
 @media (min-width:720px){.hero.two{grid-template-columns:3fr 2fr}.strip{grid-template-columns:1fr 1fr}}
 @media (min-width:880px){.report-grid{grid-template-columns:minmax(0,1.65fr) minmax(0,1fr)}}
@@ -753,6 +758,7 @@ details{margin:12px 0}summary{cursor:pointer}footer{padding:28px 18px 44px;color
 <a href="{{ '/about.html' | relative_url }}"{% if page.section == "about" %} aria-current="true"{% endif %}>About</a>
 </nav>
 <div class="notice">{{ site.disclosure }}</div>
+{% if site.announcement %}<div class="notice announce">{{ site.announcement }}</div>{% endif %}
 </header>
 <main>
 {{ content }}
@@ -827,15 +833,6 @@ def build(out, use_gh=True):
     team_levels = [latest_mood(w["slug"])[1] for w in active if latest_mood(w["slug"])[1]]
     team_mood = round(sum(team_levels) / len(team_levels)) if team_levels else None
 
-    def mood_on(date):
-        """Team mood as of a date: each active worker's last diary on or before it."""
-        levels = []
-        for w in active:
-            prior = [m for m in moods.get(w["slug"], []) if m[0][:10] <= date]
-            if prior:
-                levels.append(prior[-1][1])
-        return round(sum(levels) / len(levels)) if levels else None
-
     history = [h for h in (board.get("history") or []) if isinstance(h, dict)]
     stage = board.get("stage") or ("selling" if num(board.get("revenue_usd")) > 0 else "research")
     launched = bool(board.get("launched")) or stage in ("launch", "selling")
@@ -850,11 +847,16 @@ def build(out, use_gh=True):
     day = int(num(board.get("day"), 0))
     days_left = int(num(board.get("days_left"), max(0, days_total - day)))
 
-    # Jekyll config and layout
+    # Jekyll config and layout. url is the scheme and host; baseurl is the path (empty at a root or custom domain).
+    parsed = urlparse(str(cfg.get("url") or ""))
+    site_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
+    investor = load_investor_settings()
     site.write("_config.yml", "\n".join([
         f"title: {json.dumps(cfg['name'])}",
         f"description: {json.dumps(cfg['tagline'])}",
-        f"url: {json.dumps(cfg.get('url') or '')}",
+        f"url: {json.dumps(site_url)}",
+        f"baseurl: {json.dumps(parsed.path.rstrip('/'))}",
+        f"announcement: {json.dumps(str(investor.get('announcement') or ''))}",
         f"disclosure: {json.dumps(cfg['disclosure'])}",
         "plugins: [jekyll-feed]",
         "feed: {path: feed.xml}",
@@ -868,7 +870,10 @@ def build(out, use_gh=True):
         "    values: {permalink: \"/reports/:title/\"}",
         "",
     ]))
-    site.write("_layouts/default.html", LAYOUT)
+    theme = os.path.join(INVESTOR_DIR, "theme.css")
+    extra_css = read(theme).strip() if os.path.exists(theme) else ""
+    site.write("_layouts/default.html", LAYOUT.replace(
+        "</style>", ("/* investors/site/theme.css */\n{% raw %}" + extra_css + "{% endraw %}\n" if extra_css else "") + "</style>"))
     site.write("README.md", f"# {cfg['name']} site\n\nGenerated by tools/site_build.py in the company repository. Don't edit by hand.\n")
 
     # Portraits: the still copies as drawn on hire, and animated ones that carry today's mood
@@ -968,6 +973,7 @@ def build(out, use_gh=True):
 
     # Reports as posts (newest first, RSS for free): a header that says which report this is,
     # the progress strip, the report beside what happened in its period, and links to the neighbours
+    ceo = next((w for w in workers if w["status"] == "active" and str(w.get("role", "")).strip().lower() == "ceo"), None)
     usage_days = usage_file.get("days") or {}
     weekly_budget = num(usage_file.get("weekly_budget_usd"), 150)
     hist_by_date = {h.get("date"): h for h in history if h.get("date")}
@@ -977,13 +983,10 @@ def build(out, use_gh=True):
         fallback = revenue if i == 0 else 0.0
         rev = num(r.get("revenue_usd"), num(hist_by_date.get(r["date"], {}).get("revenue_usd"), fallback))
         used = num(usage_days.get(r["date"]))
-        tm = mood_on(r["date"])
-        team_chip = mood_chip(tm) if tm else '<span class="mood-why">not recorded</span>'
         strip = ['<div class="strip">',
                  f'<div class="row"><span class="tag">Day {rday} of {days_total}</span>{day_track(rday, days_total, launched_day)}</div>',
                  f'<div class="row">{bar("Net proceeds", rev, goal, cls="money")}</div>',
-                 f'<div class="row">{bar("Claude usage that day", used, weekly_budget / 7, note=f"${used:,.2f} of a 1/7 share")}</div>',
-                 f'<div class="row"><span>Team morale that day:</span> {team_chip}</div>',
+                 f'<div class="row">{pct_bar("Claude usage that day", used, weekly_budget / 7, "the daily pace")}</div>',
                  "</div>"]
         # This period: events, people, moods, and usage since the previous report
         # A report's window runs from the previous report to this one, each shifted by a grace
@@ -993,15 +996,10 @@ def build(out, use_gh=True):
         start_t = ((when_time(prev) + REPORT_GRACE) if prev and when_time(prev)
                    else (dt.datetime.combine(day1, dt.time(0, 0)) if day1 else dt.datetime(1970, 1, 1)))
         in_window = [e for e in events if (lambda t: t and start_t < t <= end_t)(event_time(e))]
+        done = [e for e in in_window if str(e.get("type", "")).lower() not in STORY_TYPES]
         aside = ['<div class="panel period" role="complementary" aria-label="This period">',
-                 "<h3>What happened since the last report</h3>", rail(in_window, by_slug)]
-        people = people_strip(in_window, by_slug, variants)
-        if people:
-            aside += ["<h3>People</h3>", people]
-        ml = mood_list(story, by_slug, start_t, end_t)
-        if ml:
-            aside += ["<h3>How they felt</h3>", ml]
-        aside.append("</div>")
+                 "<h3>What got done since the last report</h3>", rail(done, by_slug), "</div>"]
+        behind = [s for s in story if (lambda t: t and start_t < t <= end_t)(when_time(s["when"]))]
         wide = []
         if kind in ("weekly", "final"):
             span = 30 if kind == "final" else 7
@@ -1009,10 +1007,6 @@ def build(out, use_gh=True):
             dlist = [(rdate - dt.timedelta(days=k)).isoformat() for k in range(span - 1, -1, -1)] if rdate else []
             vals = [num(usage_days.get(d)) for d in dlist]
             wide += [f"<h3>Claude usage, the last {span} days</h3>", daily_bars([d for d in dlist], vals, weekly_budget / 7)]
-            day_of = (lambda when_s: (dt.date.fromisoformat(when_s[:10]) - day1).days + 1) if day1 else (lambda when_s: 0)
-            sm = small_multiples(active, moods, max(1, rday - span + 1), rday, day_of)
-            if sm:
-                wide += [f"<h3>Mood over the {'month' if kind == 'final' else 'week'}</h3>", sm]
             if kind == "final":
                 milestones = [e for e in events if str(e.get("type", "")).lower() in MILESTONE_TYPES]
                 wide += ["<h3>The month, in milestones</h3>", rail(milestones, by_slug, limit=60)]
@@ -1028,6 +1022,10 @@ def build(out, use_gh=True):
         lead, headline = split_title(r["title"])
         kicker = (report_badge(kind, " report") + (f'<span class="num">{safe(lead)}</span>' if lead else "")
                   + f"<span>Day {rday} of {days_total} · {nice_date(r['date'])}, {esc(r['when'][11:16])}</span>")
+        author = by_slug.get(slugify(str(r.get("author") or ""))) or ceo
+        byline = (f'<div class="byline">{avatars([author["slug"]], by_slug)}<span>From '
+                  f'<a href="{rel("/cast/" + author["slug"] + ".html")}">{esc(author["name"])}</a>, {safe(author.get("role", "CEO"))}</span></div>'
+                  if author else "")
         callout = ""
         if r.get("issue"):
             callout = (f'<div class="callout"><b>Investors:</b> this report\'s private copy, with its Questions for the Investors, '
@@ -1041,11 +1039,15 @@ def build(out, use_gh=True):
         head = {"layout": "default", "title": r["title"], "date": f"{r['when']}:00", "kind": kind,
                 "day": r.get("day"), "number": r.get("number"), "section": "reports"}
         body = [crumbs("/reports/", "All reports", f'<span class="step">{step}</span>' if step else ""),
-                page_head(kicker, safe(headline)), "\n".join(strip), "",
+                page_head(kicker, safe(headline), byline), "\n".join(strip), "",
                 '<div class="report-grid" markdown="1">', '<div class="report-main" markdown="1">', "",
                 raw(r["body"]), callout, "", "</div>", "\n".join(aside), "</div>", ""]
         if wide:
             body += ['<div class="panel period wide">' + "\n".join(wide) + "</div>", ""]
+        if behind:
+            last_day = max(x["when"][:10] for x in behind)
+            body += [f'<p class="behind">Behind the scenes: <a href="{rel("/story/#d-" + last_day)}">{len(behind)} '
+                     f'record{"s" if len(behind) != 1 else ""} from this period</a> in the records.</p>', ""]
         body.append(pager)
         site.write(os.path.join("_posts", f"{r['date']}-{r['slug']}.md"), fm(head) + "\n".join(body) + "\n")
 
@@ -1057,10 +1059,8 @@ def build(out, use_gh=True):
     for date in sorted(by_date, reverse=True):
         rs = by_date[date]
         n = rs[0].get("day") or day_of_date(date)
-        tm = mood_on(date)
-        morale = f'<span class="day-mood">team morale {mood_chip(tm)}</span>' if tm else ""
         groups.append(f'<div class="day"><h2 class="day-head"><span>{("Day " + esc(n)) if n else nice_date(date)}</span>'
-                      f'<small>{nice_date(date)} · {len(rs)} report{"s" if len(rs) != 1 else ""}</small>{morale}</h2>'
+                      f'<small>{nice_date(date)} · {len(rs)} report{"s" if len(rs) != 1 else ""}</small></h2>'
                       f'<div class="cards">{"".join(report_card(r) for r in rs)}</div></div>')
     rep = [fm({"layout": "default", "title": "Reports", "section": "reports"}), "# Reports", "",
            '<p class="lead">A report is published every evening, and every morning after a night when something happened. '
@@ -1099,6 +1099,10 @@ def build(out, use_gh=True):
         index += ["## Latest report", "", f'<div class="cards one">{report_card(latest)}</div>', ""]
     if active:
         index += ["## The cast", "", '<div class="cast">' + cast_strip + "</div>", ""]
+    latest_recs = sorted([x for x in story if not x["path"].startswith("hiring/")], key=lambda m: m["when"], reverse=True)[:4]
+    if latest_recs:
+        index += ["## From the records", "", '<ul class="recs">' + "".join(rec_item(x, show_day=True) for x in latest_recs) + "</ul>",
+                  f'<p><a href="{rel("/story/")}">All records</a></p>', ""]
     if len(reports) > 1:
         index += ["## Earlier reports", "", '<div class="cards">' + "".join(report_card(r, compact=True) for r in reports[1:4]) + "</div>", ""]
     index += [f'<p><a href="{rel("/reports/")}">All reports</a>' + (f' · <a href="{rel("/requests.html")}">open requests</a> · <a href="{msg_url}">message the company</a>' if msg_url else "") + "</p>", ""]
@@ -1106,9 +1110,7 @@ def build(out, use_gh=True):
 
     # Cast
     cast = [fm({"layout": "default", "title": "Cast", "section": "cast"}), "# The cast", "",
-            '<p class="lead">Every worker is an AI-simulated character with a first name, a role, a personality, and a career goal. '
-            "Portraits are drawn by code from a mathematical expression seeded by the name, and move in a way chosen by the worker's temperament; "
-            "the word under each name is the feeling from their latest diary, in their own word.</p>", ""]
+            '<p class="lead">Every worker is an AI-simulated character with a first name, a role, a personality, and a career goal.</p>', ""]
     for status, label in STATUS_GROUPS:
         group = [w for w in workers if w["status"] == status or (status == "former" and w["status"] not in ("active", "candidate"))]
         if not group:
@@ -1189,12 +1191,18 @@ def build(out, use_gh=True):
     rgroups = []
     for date in sorted(rec_days, reverse=True):
         items = sorted(rec_days[date], key=lambda m: m["when"], reverse=True)
-        rgroups.append(f'<div class="day"><h2 class="day-head"><span>{day_label(date)}</span><small>{nice_date(date)} · '
+        rgroups.append(f'<div class="day" id="d-{date}"><h2 class="day-head"><span>{day_label(date)}</span><small>{nice_date(date)} · '
                        f'{len(items)} record{"s" if len(items) != 1 else ""}</small></h2>'
                        f'<ul class="recs">{"".join(rec_item(s) for s in items)}</ul></div>')
     recs_page = [fm({"layout": "default", "title": "Records", "section": "records"}), "# Records", "",
-                 '<p class="lead">Diaries, meetings, conversations, and hiring rounds, as the workers wrote them. '
-                 "The reports quote from these records.</p>", ""]
+                 '<p class="lead">Diaries, meetings, conversations, hiring rounds, and testimonies, as the workers wrote them. '
+                 "This is where the company's story lives; the reports stick to the business.</p>", ""]
+    day_of = (lambda when_s: (dt.date.fromisoformat(when_s[:10]) - day1).days + 1) if day1 else (lambda when_s: 0)
+    end_day = day or max([day_of(m[0]) for ms in moods.values() for m in ms] or [0])
+    week_minis = small_multiples(active, moods, max(1, end_day - 6), end_day, day_of) if end_day else ""
+    if week_minis:
+        recs_page += ['<h2 id="this-week">This week</h2>', "",
+                      '<p class="mood-why">Each worker\'s mood over the last seven days, from their diaries.</p>', "", week_minis, ""]
     if round_list:
         recs_page += ['<h2 id="hiring-rounds">Hiring rounds</h2>', "",
                       f'<div class="cards">{"".join(round_card(rd) for rd in round_list)}</div>', ""]
@@ -1278,32 +1286,29 @@ def build(out, use_gh=True):
     caps = {k: num(v) for k, v in (usage.get("caps") or {}).items()}
     shares = usage.get("shares_7d") or {}
     up = [fm({"layout": "default", "title": "Usage", "section": "usage"}), "# Claude usage", "",
-          '<p class="lead">One Claude Max subscription runs the company. The plan meters a rolling 5-hour window, a weekly window, '
-          "and a weekly Fable window; the company aims to use the whole weekly allowance by each reset, never early (Tenet 7). "
-          "Figures are Claude Code's own cost estimate at API rates.</p>", ""]
+          '<p class="lead">One Claude Max 20x subscription runs the company, and it never buys extra usage. The plan meters a rolling '
+          "5-hour window, a weekly window, and a weekly Fable allowance; each bar shows how much of that limit is used. "
+          "The company aims to use the whole weekly allowance by each reset, never early (Tenet 7).</p>", ""]
     if usage:
         up += ['<div class="panel">',
-               (bar("Last 5 hours", five_used, num(five_budget)) if five_budget
-                else bar("Last 5 hours", five_used, 0, note=f"${five_used:,.2f} · 5-hour budget not calibrated yet", cls="ok")),
-               bar("Today", num(pace.get("today_used_usd")), num(pace.get("today_share_usd")),
-                   note=f"${num(pace.get('today_used_usd')):,.2f} of today's share ${num(pace.get('today_share_usd')):,.2f}"),
-               bar("This week", num(pace.get("used_week_usd")), num(pace.get("budget_usd"))),
-               bar("Fable this week", num(usage.get("fable_week_usd")), num(usage.get("fable_allowance_usd"))),
+               pct_bar("Last 5 hours", five_used, num(five_budget), "the 5-hour limit"),
+               pct_bar("Today", num(pace.get("today_used_usd")), num(pace.get("today_share_usd")), "the daily pace"),
+               pct_bar("This week", num(pace.get("used_week_usd")), num(pace.get("budget_usd")), "the weekly limit"),
+               pct_bar("Fable this week", num(usage.get("fable_week_usd")), num(usage.get("fable_allowance_usd")), "its weekly allowance"),
                "</div>", ""]
         up += ["## Last 7 days, by category", ""]
         if any(num(v) > 0 for v in shares.values()):
             up += [stacked(shares, caps), ""]
         up += ["| Category | Share | Cap |", "| --- | --- | --- |"]
         for c, label in CATEGORY_LABELS:
-            cap = f"{caps[c] * 100:.0f}%" if c in caps else "at least 87% (90% in a week without a hiring round)"
+            cap = f"{caps[c] * 100:.0f}%" if c in caps else "at least 90%"
             up.append(f"| {c} | {num(shares.get(c)):.1%} | {cap} |")
         up.append("")
         if usage.get("weeks"):
             up += ["## Past weeks", ""]
             for wk in usage["weeks"][-8:]:
                 hit = " · limit hit" if wk.get("weekly_limit_hit") else ""
-                up.append(bar(f"Week of {wk['start'][:10]}", num(wk["spent_usd"]), num(wk["budget_usd"]),
-                              note=f"${num(wk['spent_usd']):,.2f} of ${num(wk['budget_usd']):,.2f}{hit}"))
+                up.append(pct_bar(f"Week of {wk['start'][:10]}", num(wk["spent_usd"]), num(wk["budget_usd"]), "the weekly limit", hit))
             up.append("")
     up += ["## The figures", "", usage_block or "No usage recorded yet.", ""]
     site.write("usage.md", "\n".join(up))
@@ -1328,19 +1333,38 @@ def build(out, use_gh=True):
     # Pages the company writes: about, privacy, support, press, under the About tab with their own tabs
     pages = {"about": "About", "privacy": "Privacy policy", "support": "Support", "press": "Press kit"}
     short = {"about": "About", "privacy": "Privacy", "support": "Support", "press": "Press kit"}
-    for key, title in pages.items():
+    defaults = {"about": f"# About\n\n{cfg['tagline']}\n\n{cfg['disclosure']}\n",
+                "privacy": "# Privacy policy\n\nTo be written before launch.\n",
+                "support": "# Support\n\nSupport details are posted here before launch.\n",
+                "press": "# Press kit\n\nThe press kit is published here at launch.\n"}
+    sources = {}
+    for key in pages:
         src = os.path.join(ROOT, "site", "pages", f"{key}.md")
-        if os.path.exists(src):
-            meta, body = front_matter(read(src))
-            body = scrub(body)
-        else:
-            meta, body = {}, {"about": f"# About\n\n{cfg['tagline']}\n\n{cfg['disclosure']}\n",
-                              "privacy": "# Privacy policy\n\nTo be written before launch.\n",
-                              "support": "# Support\n\nSupport details are posted here before launch.\n",
-                              "press": "# Press kit\n\nThe press kit is published here at launch.\n"}[key]
+        sources[key] = front_matter(read(src)) if os.path.exists(src) else ({}, defaults[key])
+    # The Investors' pages (investors/site/pages/) replace a company page of the same name or add one
+    for src in sorted(glob.glob(os.path.join(INVESTOR_DIR, "pages", "*.md"))):
+        key = slugify(os.path.splitext(os.path.basename(src))[0])
+        sources[key] = front_matter(read(src))
+        if key not in pages:
+            pages[key] = sources[key][0].get("title") or key.replace("-", " ").capitalize()
+            short[key] = pages[key]
+    for key, title in pages.items():
+        meta, body = sources[key]
+        body = scrub(body)
         sub = "".join(f'<a href="{rel("/" + k + ".html")}"{" aria-current=" + chr(34) + "page" + chr(34) if k == key else ""}>{v}</a>' for k, v in short.items())
         site.write(f"{key}.md", fm({"layout": "default", "title": meta.get("title", title), "section": "about"})
                    + f'<div class="subtabs" role="navigation" aria-label="About the experiment">{sub}</div>\n\n' + raw(body))
+
+    site.write("404.md", fm({"layout": "default", "title": "Page not found", "permalink": "/404.html"})
+               + f"# Page not found\n\nThere is nothing at this address. [Go to the home page]({rel('/')}).\n")
+
+    # The Investors' files (investors/site/files/) are copied last, so they win: a favicon, images, a CNAME
+    files_dir = os.path.join(INVESTOR_DIR, "files")
+    for dirpath, _, filenames in os.walk(files_dir):
+        for name in filenames:
+            if not name.startswith("."):
+                src = os.path.join(dirpath, name)
+                site.copy(src, os.path.relpath(src, files_dir))
 
     site.clean()
     return {"reports": len(reports), "workers": len(workers), "events": len(events), "story": len(story),

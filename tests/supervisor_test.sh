@@ -109,11 +109,11 @@ ok "garbage input: allowed" "[ \$(printf 'xx' | $H >/dev/null 2>&1; echo \$?) = 
 echo "== report sessions"
 reset
 tick 2026-11-01T18:05:00-05:00 >/dev/null
-ok "Day 1 evening: sonnet low, 30 turns" "grep -qx sonnet $FAKE_ARGS && grep -qx low $FAKE_ARGS && grep -qx 30 $FAKE_ARGS && [ \"\$(j ops/run.json 'd[\"run\"]')\" = evening ]"
+ok "Day 1 evening: sonnet low, 20 turns, facts file built first" "[ -f ops/report_facts.md ] && grep -qx sonnet $FAKE_ARGS && grep -qx low $FAKE_ARGS && grep -qx 20 $FAKE_ARGS && [ \"\$(j ops/run.json 'd[\"run\"]')\" = evening ]"
 ok "evening cost counted as reports, not project" "python3 -c \"import json; c=json.load(open('ops/usage.json'))['runs'][-1]['cats']; assert 'reports' in c and 'project' not in c, c\""
 reset; python3 tools/governor.py set-day1 2026-10-26 >/dev/null
 tick 2026-11-01T18:05:00-05:00 >/dev/null
-ok "Day 7 evening is weekly: sonnet medium 45" "[ \"\$(j ops/run.json 'd[\"run\"], d[\"weekly\"]')\" = 'weekly True' ] && grep -qx medium $FAKE_ARGS && grep -qx 45 $FAKE_ARGS"
+ok "Day 7 evening is weekly: sonnet medium 30" "[ \"\$(j ops/run.json 'd[\"run\"], d[\"weekly\"]')\" = 'weekly True' ] && grep -qx medium $FAKE_ARGS && grep -qx 30 $FAKE_ARGS"
 ok "weekly sets last_evening" "[ \"\$(j ops/state.json 'd[\"last_evening_date\"]')\" = 2026-11-01 ]"
 reset; python3 tools/governor.py set-day1 2026-10-03 >/dev/null
 tick 2026-11-01T18:05:00-05:00 >/dev/null
@@ -125,7 +125,7 @@ reset
 python3 -c 'import json; s=json.load(open("ops/state.json")); s["last_evening_at"]="2026-11-02T18:05:00-05:00"; s["last_evening_date"]="2026-11-02"; json.dump(s,open("ops/state.json","w"))'
 echo '{"time":"2026-11-02T23:00:00-05:00","worker":"maya","type":"commit","summary":"x"}' > log/events.jsonl
 tick 2026-11-03T06:05:00-05:00 >/dev/null
-ok "active night: morning on haiku low 20" "[ \"\$(j ops/run.json 'd[\"run\"]')\" = morning ] && grep -qx haiku $FAKE_ARGS && grep -qx 20 $FAKE_ARGS"
+ok "active night: morning on haiku low 12" "[ \"\$(j ops/run.json 'd[\"run\"]')\" = morning ] && grep -qx haiku $FAKE_ARGS && grep -qx 12 $FAKE_ARGS"
 rm -f log/events.jsonl
 
 echo "== status and stdin"

@@ -13,3 +13,5 @@ DerivedData/
 __pycache__/
 ops/runs/*.jsonl
 ops/.auth_alerted
+ops/report_facts.md
+ops/questions.md

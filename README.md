@@ -30,7 +30,7 @@ The repository is private. Its owner adds the other Investor under **Settings > 
 | Days 7, 14, 21, 28 | Weekly report inside the evening report | The company |
 | Day 30 | The Final Report, with every worker's testimony, and one of three endings: Continue, Request for More Funding, or File for Bankruptcy | The company proposes; Investors decide |
 
-Reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. Each report carries the company's usage figures and ends with its Questions for the Investors, answered on the report's private copy, a GitHub issue linked from it; the public site never shows the questions. Between reports the site's cast pages, log, usage, and open requests update after every run. The Investors can message the company at any time through a GitHub issue.
+The CEO's reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. Each report is her business update, with the company's usage as percentages of the plan's limits, and ends with its Questions for the Investors, answered on the report's private copy, a GitHub issue linked from it; the public site never shows the questions. The company's story, the workers' diaries, conversations, and hiring rounds, is in the site's Records section. Between reports the records, cast pages, log, usage, and open requests update after every run. The site goes online when the Investors switch it on in `investors/site/settings.json`. The Investors can message the company at any time through a GitHub issue.
 
 ## The gate (before Day 1)
 
@@ -68,14 +68,16 @@ Day 1 does not start until all five are true. Setup time on Day 1 counts toward 
 | `setup/SITE.md` | The site: pages, data contract, how it updates, answering on GitHub | Investors |
 | `setup/OPERATIONS.md` | The Operations Guide | Investors |
 | `investors/allowlist.md` | GitHub usernames whose messages count as instructions | Investors |
+| `investors/site/` | The Investors' site controls: the publish switch, an announcement, styles, pages, and files | Investors |
 | `.claude/settings.json` | Permission allow and deny rules, the two hooks, subagent limits | Investors |
 | `ops/prompts/day1.md` | The first prompt | Investors |
 | `ops/prompts/work.md`, `morning.md`, `evening.md` | The fixed prompts for each session type | The company may improve |
 | `tools/supervisor.sh`, `governor.py`, `inbox_check.sh`, `quiet_night.py`, `run_queue.sh`, `events.py`, `xc.sh`, `install-launchd.sh` | The run loop and usage governor, tested and ready to install on Day 1 | The company may improve |
 | `tools/site_build.py`, `tools/site_publish.sh`, `tools/portrait.py` | The public site generator and publisher, and the animated portrait generator, tested | The company may improve |
 | `tools/hiring_check.py` | Checks that every hire went through a complete hiring round, in order (Commandment 18) | The company may improve |
+| `tools/report_facts.py` | Gathers everything a report needs into one file before each report session, without Claude | The company may improve |
 | `ops/launchd/` | The LaunchAgent template (every 15 minutes) | The company may improve |
-| `tests/run.sh`, `tests/*_test.sh`, stand-ins | 169 checks of the run loop, governor, model guard, site generator, portraits, and hiring-round check, run with a stand-in `claude` and `gh` | The company may improve |
+| `tests/run.sh`, `tests/*_test.sh`, stand-ins | 197 checks of the run loop, governor, model guard, site generator, portraits, report facts, and hiring-round check, run with a stand-in `claude` and `gh` | The company may improve |
 | `.gitignore`, `ops/queue/README.md` | Housekeeping | The company may improve |
 
 The `company` repository, created from this template, starts with all of these. The company creates everything else. Every worker has a first name only.

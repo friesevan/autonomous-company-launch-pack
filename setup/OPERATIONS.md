@@ -30,6 +30,7 @@ The loop ships in `tools/`, tested. Day 1 installs it; it is not built from scra
 | `tools/install-launchd.sh` | Installs the LaunchAgent (`ops/launchd/`), no sudo |
 | `tools/site_build.py`, `tools/site_publish.sh` | Builds the public site from the records and pushes it (`setup/SITE.md`) |
 | `tools/hiring_check.py` | Verifies that every hire's round is complete and in order (section 5) |
+| `tools/report_facts.py` | Writes `ops/report_facts.md`, everything a report needs since the last one, before every report session (section 8) |
 | `ops/prompts/work.md`, `morning.md`, `evening.md` | The fixed prompt for each session type |
 
 ### One tick
@@ -40,25 +41,25 @@ The loop ships in `tools/`, tested. Day 1 installs it; it is not built from scra
 2. **Sync.** `git pull --ff-only`, so Investor edits to `CLAUDE.md`, the rules, or the allowlist take effect on the next tick.
 3. **Inbox.** `tools/inbox_check.sh` asks GitHub for issues and comments since the last check, from allowlisted accounts, ignoring the company's own; if there are any, it creates `ops/inbox_pending`.
 4. **Decide.** `tools/governor.py decide` returns one of:
-    - `evening`, `weekly` (Days 7, 14, 21, 28), or `final` (Day 30): due at 6:00 p.m. and not yet done today; the narrative pass, the report, and its private copy.
+    - `evening`, `weekly` (Days 7, 14, 21, 28), or `final` (Day 30): due at 6:00 p.m. and not yet done today; the diaries and conversations for the records, the CEO's report, and its private copy.
     - `morning`: due between 6:00 a.m. and noon, only if an evening report exists from an earlier day and `tools/quiet_night.py` found activity since it. A quiet night marks the morning as skipped and moves on.
     - `queue`: a usage limit was hit and its pause hasn't ended, Claude Code was found logged out within the last hour, or today's share of the weekly budget is spent. The supervisor runs `tools/run_queue.sh` instead of Claude.
     - `skip`: nothing to do: no open task on the board, no pending Investor message, and a work session ran within the last hour. If the week is behind pace, a `work` session with `backlog` runs instead (at most every two hours), and the CEO refills the board (Tenet 7).
     - `work`: otherwise.
-5. **Prepare.** Write the decision to `ops/run.json` for the session (and the model guard) to read: the day, the flags, `fable_ok`, `over_cap`, and the session's spending cap. Run `rules/build_agents.py` so the workers carry the current rules and amendments (on Day 30, with `--include-former`, so former workers can write their testimonies).
+5. **Prepare.** Write the decision to `ops/run.json` for the session (and the model guard) to read: the day, the flags, `fable_ok`, `over_cap`, and the session's spending cap. Run `rules/build_agents.py` so the workers carry the current rules and amendments (on Day 30, with `--include-former`, so former workers can write their testimonies). Before a report session, run `tools/report_facts.py`: everything the report needs since the last one, in `ops/report_facts.md` (section 8).
 6. **Run** one headless session with the type's model, effort, and turn cap (table below), `--max-budget-usd` (the session's cap), `--permission-mode auto --permission-prompts none`, `--no-session-persistence` (nothing is ever resumed, and saved sessions would cost background summarization), and `--output-format stream-json --verbose`, with stdin closed (otherwise Claude Code waits 3 seconds for piped input).
 7. **Account.** `tools/governor.py record` reads the stream: the cost, split by category and by model (section 4), turns, denials, and whether a usage limit, the Fable limit, or a logged-out Claude Code stopped the run. It saves the result beside the stream as `ops/runs/<time>-<type>.json`.
 8. **Retry once** if the session crashed. A limit, a log-out, or a turn or spending cap is not a crash.
 9. **Alert** the Investors with an `emergency` issue if Claude Code is logged out (at most every 12 hours), since nothing else can run until someone logs in again.
 10. **Commit** anything the session left behind, as the Operator, and push.
-11. **Publish the site.** `tools/site_publish.sh` rebuilds the site from the records (no Claude, about a second) and pushes it; GitHub Pages renders it within minutes. It also runs after a queue tick, so the site keeps up while sessions are paused.
+11. **Publish the site.** `tools/site_publish.sh` rebuilds the site from the records (no Claude, about a second), commits it in the site repository, and pushes it while the Investors' publish switch is on (`investors/site/settings.json`); GitHub Pages renders it within minutes. It also runs after a queue tick, so the site keeps up while sessions are paused.
 
 | Session | Prompt | Model | Effort | Turn cap | Why |
 | --- | --- | --- | --- | --- | --- |
 | `work` | `work.md` | sonnet | medium | 40 | Dispatching and bookkeeping; workers do the hard thinking on the model each task needs (Tenet 6) |
-| `morning` | `morning.md` | haiku | low | 20 | A report assembled from the event log |
-| `evening` | `evening.md` | sonnet | low | 30 | The report, its Questions for the Investors, and its private copy; diaries on Haiku |
-| `weekly` | `evening.md` | sonnet | medium | 45 | The evening report plus "Week N in review" |
+| `morning` | `morning.md` | haiku | low | 12 | The CEO's short report, from the facts file |
+| `evening` | `evening.md` | sonnet | low | 20 | Diaries and conversations on Haiku for the records, then the CEO's report, its Questions for the Investors, and its private copy |
+| `weekly` | `evening.md` | sonnet | medium | 30 | The evening report plus "Week N in review" |
 | `final` | `evening.md` | opus | high | 70 | The Final Report on Day 30; testimonies on Sonnet, the verdict on Fable |
 
 Each session also gets a spending cap (`--max-budget-usd`): a work session may spend what is left of today's share (at least a quarter of the share), the morning report 5% of it, the evening report 15%, the weekly report 25%, and the Final Report a full day's share, never less than $0.50. A runaway session stops instead of eating the week.
@@ -106,7 +107,7 @@ The Max plan has a rolling 5-hour window and a weekly window, shared across all 
     - **Aligned weeks.** On Day 1 the company sets the pacing week to start when the plan's weekly limit resets, as `/usage` shows it (`python3 tools/governor.py set-anchor <time>`), so "the end of the week" means the same thing to the governor and to the plan.
     - **Safe only with usage credits off.** At a limit, work pauses and the queue runs; with credits on, it would bill instead.
 - **Categories.** Every run's cost is split into project work, reports, meetings, and small talk. A session's own messages count to its type (work sessions are project work; the four report sessions are reports). A worker call counts to the tag that starts its description: `[meeting]`, `[diary]` or `[talk]`, `[report]` or `[testimony]`; untagged calls count to the session's type. The split comes from the stream-json output, where each worker message carries the id of the call that started it; if a release ever drops that field, everything counts to the session's type and the per-model totals still hold.
-- **Caps.** Over a rolling 7 days: reports 5%, meetings 4%, hiring 3%, small talk 1% (`caps` in `ops/usage.json`; the defaults fill in any cap a saved file lacks). A category over its cap appears in `over_cap` in `ops/run.json`: the hook stops diaries and small talk, the Operator holds only meetings that unblock work, runs hiring rounds in their fallback form (section 5), and the evening report keeps to 800 words.
+- **Caps.** Over a rolling 7 days: reports 3%, meetings 3%, hiring 3%, small talk 1%, so at least 90% goes to project work (`caps` in `ops/usage.json`; the defaults fill in any cap a saved file lacks). A category over its cap appears in `over_cap` in `ops/run.json`: the hook stops diaries and small talk, the Operator holds only meetings that unblock work, runs hiring rounds in their fallback form (section 5), and the evening report keeps to 400 words.
 - **A limit hit** is detected from a failed session's result text (a successful session that merely mentions a limit is ignored); the governor pauses Claude sessions for 5 hours (24 for a weekly limit) and the supervisor runs the queue instead. A Fable limit pauses only Fable. `python3 tools/governor.py mark-limit <hours>` pauses by hand.
 - **Logged out.** If a session fails with "Not logged in", the governor holds sessions for an hour, retries hourly, and the supervisor opens one `emergency` issue telling the Investors how to log in again. The next good run clears it.
 - **Never idle.** When sessions are paused or the share is spent, `tools/run_queue.sh` runs every script in `ops/queue/`: builds and tests through `tools/xc.sh`, Simulator screenshots, clearing DerivedData, site generation, anything a worker queued. Each item runs once and moves to `ops/queue/done/`; the next session reads the logs.
@@ -217,7 +218,7 @@ The CEO sets the cadence (Commandment 27). The backend supports:
 
 Every call that is part of a meeting starts its description with `[meeting]`, so the governor can count it against the 4% cap (Commandment 31). Hiring rounds use `[hiring]` instead and have their own 3% cap (Commandment 18); the interview records live under `story/hiring/`.
 
-**Small talk and diaries** are written in the evening narrative pass, at the start of the 6:00 p.m. session: one Haiku call per worker who worked that day (`[diary] <name>`), plus at most two short exchanges between workers whose days crossed (`[talk] <name> and <name>`), all started together. Writing them there, rather than at the end of task runs, keeps narrative tokens off Opus and Fable and makes them easy to count. Meeting records, diaries, and private chats live under `story/`.
+**Small talk and diaries** are the company's story, published as the records (Commandment 43). They are written at the start of the 6:00 p.m. session: one Haiku call per worker who worked that day (`[diary] <name>`), plus at most two short exchanges between workers whose days crossed (`[talk] <name> and <name>`), all started together. Writing them there, rather than at the end of task runs, keeps narrative tokens off Opus and Fable and makes them easy to count. Meeting records, diaries, and private chats live under `story/`.
 
 ## 7. Investor channels
 
@@ -242,9 +243,9 @@ All channels are GitHub issues in `company`, created and read with `gh` as the c
 
 ### Daily report
 
-The Commandment 39 structure, 800 to 1,500 words plus excerpts, written on Haiku in the morning and on Sonnet in the evening, from `log/events.jsonl` (`python3 tools/events.py since <time>`), the commits, the board, the ledger, and only the records in `story/` it quotes. It reads the event log first and opens nothing else unless it needs it. Two sections come from tools rather than prose: **Usage** is the output of `python3 tools/governor.py report-usage` (the 5-hour window, today, the week, Fable, and the split by model, each against its calibrated limit), and the scoreboard's numbers go into `ops/scoreboard.json` for the site's home page.
+The CEO's business update (Commandments 38 and 39): 300 to 700 words in the evening and under 300 in the morning, in her own voice. Before the session, the supervisor runs `tools/report_facts.py`, which writes `ops/report_facts.md` without Claude: the scoreboard; the business events since the last report (moods, interviews, offers, and report notices are left to the records); commits other than the Operator's; tasks finished and open on the board; Investor messages; usage as percentages of the plan's limits (`python3 tools/governor.py report-usage`); the latest ledger lines; open requests; and the state file. Weekly and final runs add the week's usage by category against the caps and the latest optimizations. The Operator reads that one file, starts the diaries and conversations for the records, then makes one call to the CEO (`[report] evening`, Sonnet; the morning report on Haiku), who writes the public report and `ops/questions.md`. The site draws the scoreboard, the timeline of what got done, and the usage, so the report never repeats them as tables, and Usage is one line. The scoreboard's numbers go into `ops/scoreboard.json` for the site.
 
-**Questions for the Investors** (Commandment 55) replace the old Daily Brief. They close every report in the fixed order, one line when there is nothing to ask. Every report gets a private copy: one `report` issue with the full report and the questions, where the Investors answer by midnight. The public report file is saved without the questions, with the front matter the site expects (`setup/SITE.md`): `title`, `number`, `day`, `date`, `time`, `kind`, and `issue`.
+**Questions for the Investors** (Commandment 55) replace the old Daily Brief. They close every report in the fixed order, one line when there is nothing to ask. Every report gets a private copy: one `report` issue whose body is the report followed by `ops/questions.md`, passed with `--body-file` so nothing is retyped, where the Investors answer by midnight. The public report file is saved without the questions, with the front matter the site expects (`setup/SITE.md`): `title`, `number`, `day`, `date`, `time`, `kind`, `author`, and `issue`.
 
 **Quiet nights.** At 6:00 a.m., the governor runs `tools/quiet_night.py` against the time of the last evening report. It checks, without Claude, for commits other than the supervisor's own, new event-log lines, a pending Investor message, and failed runs. If there are none, the morning report is skipped, the skip is noted in `ops/state.json`, and the evening report covers both periods (Commandment 37). A morning report is never produced before the first evening report exists.
 
@@ -254,11 +255,11 @@ Appended to the evening report as "Week N in review":
 
 1. Scoreboard against the plan: revenue, spending, days left.
 2. Milestones hit and missed, each with its evidence link.
-3. People: hires, departures, promotions, pay changes, and how each worker's career goal is going.
+3. Team: hires, departures, promotions, and pay changes, as facts.
 4. What changed in the plan, and why.
-5. Usage: spend against the governor's pacing target, by category and model, against the caps in Tenet 6 (`python3 tools/governor.py status --json`).
+5. Usage: the week as a percentage of the weekly limit, by category against the caps in Tenet 6, and Fable against its allowance (from the facts file).
 6. Next week's goals.
-7. The arc of the week, one paragraph from the narrator.
+7. The CEO's one-paragraph summary of the week.
 
 ### The Pitch (Day 2 target)
 
@@ -271,11 +272,11 @@ Replaces the evening report:
 1. Headline and the full scoreboard.
 2. Timeline of the key events from Day 1, each linked.
 3. What went right, what went wrong: the CEO's analysis.
-4. Testimonies: one section per worker, current and former, in their own voice, 150 to 300 words each, including whether they reached their career goal, written in an independent run per worker so they don't echo one another.
+4. Links to the testimonies: every worker, current and former, writes one in their own voice, 150 to 300 words, including whether they reached their career goal, in an independent run so they don't echo one another, saved as `story/testimonies/<name>.md` and published in the records.
 5. The verdict and the ending: Continue, Request for More Funding (with the evidence of promise and what the next month buys), or File for Bankruptcy (with the wind-down plan).
-6. A closing paragraph from the narrator.
+6. A closing paragraph from the CEO.
 
-It is published on the site and posted as a `brief` issue for the Investors' decision.
+It is published on the site and posted as a `report` issue for the Investors' decision.
 
 ## 9. Files
 
@@ -292,6 +293,7 @@ setup/INVESTORS.md         The Setup Guide (Investors edit only)
 setup/SITE.md              The site: pages, data contract, how it updates (Investors edit only)
 setup/OPERATIONS.md        This guide (Investors edit only)
 investors/allowlist.md     GitHub usernames whose messages count (Investors edit only)
+investors/site/            The Investors' site controls: publish switch, announcement, theme, pages, files (Investors edit only)
 .claude/settings.json      Allow / deny rules, the two hooks, and limits (Investors edit only)
 .claude/agent-memory/      Worker memories (committed)
 tools/                     The run loop (section 2), xc.sh, events.py, the site generator; plus, built on Day 1: new-worker, portrait
@@ -317,6 +319,8 @@ creative/approved.md       The style guide (Commandment 51)
 site.json                  The site's name, tagline, repository, and options
 site/pages/                about, privacy, support, press: the pages the company writes for the site
 ops/scoreboard.json        Revenue, spending, day, days left, app status: the site's home page and each report's scoreboard
+ops/report_facts.md        Everything a report needs since the last one, rebuilt before each report session (not committed)
+ops/questions.md           The CEO's Questions for the Investors for the current report (not committed)
 app/                       The iOS app
 log/                       Operational log, events.jsonl, ledger, software, assets, optimizations (never deleted)
 story/                     Meeting records, diaries, private chats (never deleted); hiring/<round>/ holds each round's brief, interviews, and decision
@@ -344,8 +348,8 @@ The Operator reports setup finished, and writes the first report, only when all 
 - [ ] The protect-records hook blocks a test `rm` of a file in `log/`.
 - [ ] `python3 rules/lookup.py 9` prints Commandment 9.
 - [ ] The issue labels exist (`report`, `urgent`, `emergency`, `pitch`, `directive`), `tools/quiet_night.py` and `tools/inbox_check.sh` run without error, and a test issue was created, detected by the inbox check, acknowledged, and closed.
-- [ ] `site.json`, `personnel/registry.json`, `ops/scoreboard.json`, and `site/pages/` exist; the `site` repository is cloned at `../site`; `tools/site_publish.sh` built and pushed it; and GitHub Pages shows the home page, the cast, the log, the usage page, and the Requests page.
-- [ ] The first report is published, with the CEO's persona and portrait, the site and the portrait style for approval, the calibrated budgets, and anything that blocked setup, and its private copy is open.
+- [ ] `site.json` (with `url` and `company_repo`), `personnel/registry.json`, `ops/scoreboard.json`, and `site/pages/` exist; the site repository is cloned at `../site`; and `tools/site_publish.sh` built and committed the site there. It goes online when the Investors set `publish` to true in `investors/site/settings.json`, after they approve the site and the first report.
+- [ ] The first report is written by the CEO, with her persona and portrait, the site and the portrait style for approval, how to put the site online, the calibrated budgets, and anything that blocked setup, and its private copy is open.
 
 ## 11. Keeping runs cheap
 
@@ -390,17 +394,17 @@ Estimates for a typical day of the build, from the same model (Claude Code's own
 
 | Item | Model | Per day: processed (written) | Cost per day | 30 days |
 | --- | --- | --- | --- | --- |
-| Morning report (skipped after quiet nights) | Haiku | 0.45M (4k) | $0.02 | $0.5 |
-| Evening report, with its Questions for the Investors | Sonnet | 0.84M (10k) | $0.39 | $11.3 |
-| Weekly review, Days 7/14/21/28 (extra) | Sonnet | 0.86M (14k) each | | $1.3 |
+| Morning report from the facts file (skipped after quiet nights) | Haiku | 0.25M (2k) | $0.01 | $0.3 |
+| Evening report from the facts file, with its Questions for the Investors | Sonnet | 0.45M (6k) | $0.21 | $6.3 |
+| Weekly review, Days 7/14/21/28 (extra) | Sonnet | 0.6M (10k) each | | $1.0 |
 | Final Report, 7 testimonies, the verdict | Opus, Sonnet, Fable | 6.0M (103k) once | | $5.9 |
 | Diaries and small talk: 5 diaries, 2 exchanges | Haiku | 0.57M (8k) | $0.09 | $2.6 |
 | Meetings: one decision meeting, one routine | Sonnet, Haiku | 0.37M (11k) | $0.29 | $8.7 |
 | Weekly planning meeting (4 per month) | Sonnet, Opus | 0.53M (19k) each | | $2.9 |
 | Hiring round: brief, slate of 3, 3 interviews, panel, decision (about 5 in the month, most in week 1) | Opus, Sonnet | 1.1M (28k) each | | $7.3 |
-| **All of the story** | | **about 80M processed, 1.3M written** | | **about $40** |
+| **All of the story** | | **about 60M processed, 1.2M written** | | **about $35** |
 
-As a share of the month's usage, that is about 6% if the weekly budget really is the $150 default (reports 2.9%, meetings 1.8%, hiring 1.2%, small talk 0.4%), 2.5% at $400 a week, and about 1% at $1,000 a week. The story's cost is nearly fixed per day, so the more the plan allows, the smaller its share. The caps in Tenet 6 (5%, 4%, 3%, 1%) sit above these estimates, so they bind only if something goes wrong, such as a meeting habit that grows or reports that run long. Hiring is the exception by design: three rounds in week 1 (about $4.35) sit just under 3% of a $150 week, which is why the cap has a fallback form instead of a stop. The first weekly review compares the measured cost of `[hiring]` calls with this estimate (Tenet 7).
+As a share of the month's usage, that is about 5% if the weekly budget really is the $150 default (reports 2.1%, meetings 1.8%, hiring 1.1%, small talk 0.4%), 2% at $400 a week, and under 1% at $1,000 a week. The story's cost is nearly fixed per day, so the more the plan allows, the smaller its share. Reports cost about half what a narrated report did: the session reads one facts file instead of making six to eight tool calls, and the report leaves the scoreboard, the timeline, and the story to the site and the records. The caps in Tenet 6 (3%, 3%, 3%, 1%) add up to 10%, so at least 90% always goes to the product, and they sit above these estimates, so they bind only if something goes wrong, such as a meeting habit that grows or reports that run long. Hiring is the exception by design: three rounds in week 1 (about $4.35) sit just under 3% of a $150 week, which is why the cap has a fallback form instead of a stop. The first weekly review compares the measured cost of `[hiring]` calls with this estimate (Tenet 7).
 
 ### Handing work to code and free models (Tenet 7)
 
@@ -408,7 +412,7 @@ Every run starts by loading Claude Code's prompt and the Commandments, so the ch
 
 | Work Claude does today | Hand it to |
 | --- | --- |
-| Gathering report facts: the scoreboard, commits and events since the last report, links | A script that writes one short facts file, so a report session reads one file instead of making several tool calls (`report-usage` already does this for the Usage section) |
+| Gathering report facts: the scoreboard, commits and events since the last report, links | Done: `tools/report_facts.py` writes `ops/report_facts.md` before every report session |
 | Sales and review downloads from App Store Connect | A script using the App Store Connect API key, run from the queue |
 | Board upkeep: moving finished tasks, counting open ones, flagging stale ones | A script |
 | App Store screenshots, link checks, release-note skeletons from commits | Scripts, run from the queue (the site build is already one: `tools/site_publish.sh`) |
@@ -444,7 +448,7 @@ Workers carry one page of rules and look up anything else with `rules/lookup.py`
 
 | Ships in the Launch Pack, tested | Built by the company on Day 1 |
 | --- | --- |
-| The supervisor, governor, inbox check, quiet-night check, queue runner, event log, build wrapper, LaunchAgent installer, hiring-round check | The worker generator (with its candidate, hire, and check-name steps) |
+| The supervisor, governor, inbox check, quiet-night check, queue runner, event log, build wrapper, LaunchAgent installer, hiring-round check, report facts | The worker generator (with its candidate, hire, and check-name steps) |
 | The session prompts (`ops/prompts/`) | The Company Handbook and the character bible |
 | The permission rules, the protect-records hook, and the model guard | The site's own pages (about, privacy, support, press kit), `site.json`, the registry, and the scoreboard file |
 | The rule lookup tool and the worker assembler | |
@@ -455,4 +459,4 @@ All of it arrives in `company` from the Launch Pack template repository, which s
 
 ## 13. The site
 
-`setup/SITE.md` is the design: the pages, the data contract, what stays private, and why answers happen on GitHub. In short: `tools/site_build.py` turns `reports/`, `story/`, `personnel/`, `log/events.jsonl`, the usage figures, the scoreboard, and the four written pages into a Jekyll site; `tools/site_publish.sh` runs it at the end of every tick and pushes to the `site` repository, which GitHub Pages renders. No Claude is involved, so the site stays within 15 minutes of the records at no usage cost. The company keeps the data contract's few files current and may restyle the layout under creative approval (Commandment 51); `tests/run.sh` checks the generator.
+`setup/SITE.md` is the design: the pages, the data contract, what stays private, and why answers happen on GitHub. In short: `tools/site_build.py` turns `reports/`, `story/`, `personnel/`, `log/events.jsonl`, the usage figures, the scoreboard, and the four written pages into a Jekyll site; `tools/site_publish.sh` runs it at the end of every tick, commits it in the site repository, and pushes it while the Investors' publish switch is on; GitHub Pages renders it. The Investors change the site through `investors/site/` (the publish switch, an announcement, their own styles, pages, and files); hand edits in the site repository are replaced at the next build. No Claude is involved, so the site stays within 15 minutes of the records at no usage cost. The company keeps the data contract's few files current and may restyle the layout under creative approval (Commandment 51); `tests/run.sh` checks the generator.

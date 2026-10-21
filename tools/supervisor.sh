@@ -47,8 +47,14 @@ case "$RUN" in
   queue) [ -x tools/run_queue.sh ] && tools/run_queue.sh; [ -x tools/site_publish.sh ] && tools/site_publish.sh >>"$LOG" 2>&1; exit 0 ;;
 esac
 
-# 5. Prepare the session: the run record it reads, and the workers it can call.
+# 5. Prepare the session: the run record it reads, the workers it can call, and for a
+#    report the one facts file it reads instead of the repository (tools/report_facts.py).
 printf '%s\n' "$DECISION" > ops/run.json
+case "$RUN" in
+  morning|evening|weekly|final)
+    python3 -I tools/report_facts.py --kind "$RUN" ${NOW_ARGS[@]+"${NOW_ARGS[@]}"} >>"$LOG" 2>&1 \
+      || log "report_facts failed; the report session will read the records itself" ;;
+esac
 FORMER=(); [ "$RUN" = final ] && FORMER=(--include-former)
 python3 -I rules/build_agents.py ${FORMER[@]+"${FORMER[@]}"} >>"$LOG" 2>&1 || log "build_agents: no workers yet"
 MODEL="$(printf '%s' "$DECISION" | jq -r .model)"

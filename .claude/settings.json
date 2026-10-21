@@ -45,7 +45,7 @@
       "Edit(CLAUDE.md)",
       "Edit(setup/**)",
       "Edit(rules/**)",
-      "Edit(investors/allowlist.md)",
+      "Edit(investors/**)",
       "Edit(.claude/settings.json)",
       "Read(~/.ssh/**)",
       "Read(~/.appstoreconnect/private_keys/**)",

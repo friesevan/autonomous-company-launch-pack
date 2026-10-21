@@ -125,12 +125,19 @@ ok "mood: color-coded words on the cast, the worker's own word and reason on the
 ok "no diary: says so, no made-up mood" "grep -q 'No mood recorded yet' $OUT/cast/ceo.md && ! grep -q 'mood-word lv[1-5]' $OUT/cast/ceo.md"
 ok "no faces anywhere (moods are words)" "! grep -rq 'class=\"face\"' $OUT"
 ok "home: tiles, pipeline hero pre-launch, no revenue chart yet" "grep -q 'class=\"tiles\"' $OUT/index.md && grep -q 'class=\"pipe\"' $OUT/index.md && grep -q 'li class=\"now\"><span class=\"dot\"></span><span class=\"lbl\">Build' $OUT/index.md && ! grep -q 'net proceeds by day' $OUT/index.md && grep -q 'team morale' $OUT/index.md"
-ok "report: progress strip with day track, money bar, usage bar, team face" "grep -q 'class=\"strip\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'class=\"track\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Net proceeds' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Team morale that day:' $OUT/_posts/2026-11-03-*evening.md && grep -q 'mood-word lv4\">Good' $OUT/_posts/2026-11-03-*evening.md"
+ok "report: strip with day track, money bar, and usage as a share of the daily pace; no morale" "grep -q 'class=\"strip\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'class=\"track\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Net proceeds' $OUT/_posts/2026-11-03-*evening.md && grep -q 'of the daily pace' $OUT/_posts/2026-11-03-*evening.md && ! grep -q 'Team morale' $OUT/_posts/2026-11-03-*evening.md && ! grep -q 'mood-word' $OUT/_posts/2026-11-03-*evening.md"
+ok "the report is the CEO's: her byline and portrait" "grep -q 'class=\"byline\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'From <a href=.*>Ceo</a>, CEO' $OUT/_posts/2026-11-03-*evening.md"
+ok "a report links to its period's records" "grep -q 'Behind the scenes' $OUT/_posts/2026-11-03-*evening.md && grep -q 'story/#d-2026-11-03' $OUT/_posts/2026-11-03-*evening.md"
+ok "cast lead is one sentence" "grep -q 'Every worker is an AI-simulated character with a first name, a role, a personality, and a career goal.</p>' $OUT/cast/index.md"
+ok "home shows the latest records" "grep -q 'From the records' $OUT/index.md && grep -q 'maya-diary.html' $OUT/index.md"
+ok "url and baseurl come from the site's address" "grep -q '^url: \"https://test.github.io\"' $OUT/_config.yml && grep -q '^baseurl: \"/site\"' $OUT/_config.yml"
+ok "a 404 page" "grep -q 'permalink: \"/404.html\"' $OUT/404.md && grep -q 'Page not found' $OUT/404.md"
 ok "usage: progress bars and the stacked category bar" "grep -q 'class=\"bar-fill\"' $OUT/usage.md && grep -q 'Fable this week' $OUT/usage.md && grep -q 'class=\"stack\"' $OUT/usage.md"
 ok "story page links its worker" "grep -q 'cast/maya.html' $OUT/story/2026-11-03-maya-diary.md && grep -q '(private)' $OUT/story/2026-11-03-maya-diary.md"
 ok "combined log newest first, pipes escaped, json export" "head -20 $OUT/log/index.md | grep -q 'Tests green' && grep -q '12/12' $OUT/log/index.md && grep -q '\\\\|' $OUT/log/index.md && python3 -c 'import json; d=json.load(open(\"$OUT/log/events.json\")); assert len(d)==3 and d[0][\"type\"]==\"test\"'"
 ok "usage page has every window" "grep -q 'Last 5 hours' $OUT/usage.md && grep -q 'This week' $OUT/usage.md && grep -q 'Fable this week' $OUT/usage.md"
-ok "usage page lists the hiring category and the 87% floor" "grep -q '| hiring |' $OUT/usage.md && grep -q 'at least 87%' $OUT/usage.md"
+ok "usage page lists the hiring category and the 90% floor" "grep -q '| hiring |' $OUT/usage.md && grep -q 'at least 90%' $OUT/usage.md"
+ok "usage is shown in percent, never in dollars" "grep -q 'of the weekly limit' $OUT/usage.md && ! grep -q '[\$]' $OUT/usage.md"
 ok "requests page lists open issues, urgent first, with message link" "grep -q 'two-factor' $OUT/requests.md && grep -q 'Questions from Report 12' $OUT/requests.md && grep -n 'two-factor\|Report 12' $OUT/requests.md | head -1 | grep -q two-factor && grep -q 'issues/new?labels=directive' $OUT/requests.md"
 ok "index has the scoreboard and the message link" "grep -q 'net proceeds' $OUT/index.md && grep -q 'Day 4' $OUT/index.md && grep -q 'issues/new' $OUT/index.md"
 ok "pages: written privacy copied, others are placeholders" "grep -q 'We collect nothing' $OUT/privacy.md && grep -q 'published here at launch' $OUT/press.md"
@@ -154,7 +161,7 @@ ok "every portrait sits on a white tile" "grep -q 'rx=\"14\" fill=\"#ffffff\"' $
 echo "== report period panel: timeline, people, moods"
 ok "evening report lists the period's events as a timeline, oldest first" "grep -q 'class=\"rail\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'First compiling build' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Chose SwiftUI' $OUT/_posts/2026-11-03-*evening.md && ! grep -q 'Tests green' $OUT/_posts/2026-11-03-*evening.md"
 ok "morning report covers only its own window" "grep -q 'Tests green' $OUT/_posts/2026-11-04-*morning.md && ! grep -q 'First compiling build' $OUT/_posts/2026-11-04-*morning.md"
-ok "the period's diary mood appears with the worker's word" "grep -q 'How they felt' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Relieved' $OUT/_posts/2026-11-03-*evening.md"
+ok "the report leaves moods to the records" "! grep -q 'How they felt' $OUT/_posts/2026-11-03-*evening.md && ! grep -q 'Relieved' $OUT/_posts/2026-11-03-*evening.md && grep -q 'Relieved' $OUT/story/index.md"
 printf '{"time": "2026-11-03T12:00:00-05:00", "worker": "maya", "type": "hire", "summary": "Maya joins as iOS engineer", "link": ""}\n' >> log/events.jsonl
 cat > reports/2026-11-07-1800.md <<'EOF'
 ---
@@ -168,8 +175,8 @@ kind: weekly
 Week one.
 EOF
 python3 tools/site_build.py --out $OUT --no-gh >/dev/null
-ok "a hire shows in the People strip with the portrait" "grep -q 'class=\"people\"' $OUT/_posts/2026-11-03-*evening.md && grep -q 'joined' $OUT/_posts/2026-11-03-*evening.md && grep -q 'portraits/maya.svg' $OUT/_posts/2026-11-03-*evening.md"
-ok "weekly report adds the 7-day usage bars and per-worker mood lines" "grep -q 'last 7 days' $OUT/_posts/2026-11-07-*weekly.md && grep -q 'Claude usage by day' $OUT/_posts/2026-11-07-*weekly.md && grep -q 'class=\"minis\"' $OUT/_posts/2026-11-07-*weekly.md"
+ok "a hire shows on the report's timeline as a team fact, with no People strip" "grep -q 'Maya joins as iOS engineer' $OUT/_posts/2026-11-03-*evening.md && ! grep -q 'class=\"people\"' $OUT/_posts/2026-11-03-*evening.md"
+ok "weekly report keeps the usage bars; the mood lines move to the records" "grep -q 'last 7 days' $OUT/_posts/2026-11-07-*weekly.md && grep -q 'Claude usage by day' $OUT/_posts/2026-11-07-*weekly.md && ! grep -q 'class=\"minis\"' $OUT/_posts/2026-11-07-*weekly.md && grep -q 'class=\"minis\"' $OUT/story/index.md"
 rm -f reports/2026-11-07-1800.md
 cat > reports/2026-11-30-1800.md <<'EOF'
 ---
@@ -194,6 +201,20 @@ ok "chart with goal line and the latest point" "grep -q 'net proceeds by day' $O
 ok "launch day marked on the track" "grep -q 'now launch\|past launch\|todo launch' $OUT/index.md"
 printf '{"revenue_usd": 0, "spent_usd": 99, "day": 4, "days_left": 26, "app_name": "Orbit", "status": "building", "stage": "build"}\n' > ops/scoreboard.json
 
+echo "== the Investors' controls (investors/site/)"
+mkdir -p investors/site/pages investors/site/files
+printf -- '---\ntitle: FAQ\n---\n# FAQ\n\nAsk us anything.\n' > investors/site/pages/faq.md
+printf -- '---\ntitle: Our privacy\n---\n# Our privacy\n\nWritten by the Investors.\n' > investors/site/pages/privacy.md
+printf 'User-agent: *\n' > investors/site/files/robots.txt
+printf ':root{--accent:#0b7a55}\n' > investors/site/theme.css
+printf '{"publish": false, "announcement": "Launch week!"}\n' > investors/site/settings.json
+python3 tools/site_build.py --out $OUT --no-gh >/dev/null
+ok "their theme is added after the site's styles" "grep -q 'investors/site/theme.css' $OUT/_layouts/default.html && grep -q -- '--accent:#0b7a55' $OUT/_layouts/default.html"
+ok "their announcement shows on every page" "grep -q 'announcement: \"Launch week!\"' $OUT/_config.yml && grep -q 'site.announcement' $OUT/_layouts/default.html"
+ok "their pages add to and replace the company's" "grep -q 'Ask us anything' $OUT/faq.md && grep -q 'aria-current=\"page\">FAQ' $OUT/faq.md && grep -q 'Written by the Investors' $OUT/privacy.md && ! grep -q 'We collect nothing' $OUT/privacy.md && grep -q 'faq.html' $OUT/about.md"
+ok "their files are copied as they are" "grep -q 'User-agent' $OUT/robots.txt"
+printf '{"publish": false, "announcement": ""}\n' > investors/site/settings.json
+
 echo "== rebuild removes stale files; --no-gh skips GitHub"
 touch $OUT/stale.md; printf 'x' > $OUT/CNAME
 python3 tools/site_build.py --out $OUT --no-gh >/dev/null
@@ -206,9 +227,17 @@ ok "no site clone: silent exit 0" "SITE_DIR=$T/nowhere tools/site_publish.sh; [ 
 ok "with a clone: builds and commits" "SITE_DIR=$SITE SITE_NO_GH=1 tools/site_publish.sh && (cd $SITE && git log --oneline | grep -q '^[0-9a-f]* site: ')"
 ok "nothing changed: no second commit" "SITE_DIR=$SITE SITE_NO_GH=1 tools/site_publish.sh && [ \$(cd $SITE && git rev-list --count HEAD) = 1 ]"
 ok "supervisor calls the publish script after a session" "grep -q 'site_publish.sh' tools/supervisor.sh"
+REMOTE="$T/site-remote.git"; git init -q --bare "$REMOTE"; (cd "$SITE" && git remote add origin "$REMOTE")
+printf '{"publish": false}\n' > investors/site/settings.json
+ok "unpublished: built and committed, nothing pushed" "SITE_DIR=$SITE SITE_NO_GH=1 tools/site_publish.sh | grep -q 'unpublished' && ! git -C $REMOTE rev-parse --verify -q main >/dev/null"
+printf '{"publish": true}\n' > investors/site/settings.json
+ok "published: pushed to main" "SITE_DIR=$SITE SITE_NO_GH=1 tools/site_publish.sh && git -C $REMOTE rev-parse --verify -q main >/dev/null"
+ok "published and nothing new: the remote matches" "SITE_DIR=$SITE SITE_NO_GH=1 tools/site_publish.sh && [ \$(git -C $REMOTE rev-parse main) = \$(git -C $SITE rev-parse HEAD) ]"
+printf '{"publish": false, "announcement": ""}\n' > investors/site/settings.json
 
 echo "== report-usage"
 ok "report-usage prints the windows" "python3 tools/governor.py report-usage --now 2026-11-04T10:00:00-05:00 | grep -q 'Last 5 hours' "
+ok "report-usage is in percent only" "python3 tools/governor.py report-usage --now 2026-11-04T10:00:00-05:00 | grep -q 'of the weekly limit' && ! python3 tools/governor.py report-usage --now 2026-11-04T10:00:00-05:00 | grep -q '[\$]'"
 ok "5-hour share uses the calibrated budget" "python3 tools/governor.py status --json --now 2026-11-04T10:00:00-05:00 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d[\"five_hour_budget_usd\"]==20.0 and \"window_5h_usd\" in d'"
 
 echo; echo "PASS $PASS  FAIL $FAIL"

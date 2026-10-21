@@ -67,11 +67,11 @@ TZ = ZoneInfo("America/New_York")
 # fraction of today's share; work sessions are capped at what's left of it.
 RUN_SPECS = {
     "work": {"prompt": "work.md", "model": "sonnet", "effort": "medium", "max_turns": 40, "category": "project"},
-    "morning": {"prompt": "morning.md", "model": "haiku", "effort": "low", "max_turns": 20,
+    "morning": {"prompt": "morning.md", "model": "haiku", "effort": "low", "max_turns": 12,
                 "category": "reports", "budget_share": 0.05},
-    "evening": {"prompt": "evening.md", "model": "sonnet", "effort": "low", "max_turns": 30,
+    "evening": {"prompt": "evening.md", "model": "sonnet", "effort": "low", "max_turns": 20,
                 "category": "reports", "budget_share": 0.15},
-    "weekly": {"prompt": "evening.md", "model": "sonnet", "effort": "medium", "max_turns": 45,
+    "weekly": {"prompt": "evening.md", "model": "sonnet", "effort": "medium", "max_turns": 30,
                "category": "reports", "budget_share": 0.25},
     "final": {"prompt": "evening.md", "model": "opus", "effort": "high", "max_turns": 70,
               "category": "reports", "budget_share": 1.0},
@@ -88,7 +88,7 @@ USAGE_DEFAULTS = {
     "week_closed_until": None,
     "weeks": [],
     "limit_hits": [],
-    "caps": {"reports": 0.05, "meetings": 0.04, "hiring": 0.03, "talk": 0.01},
+    "caps": {"reports": 0.03, "meetings": 0.03, "hiring": 0.03, "talk": 0.01},
     "week_anchor": None,
     "rate_limit_until": None,
     "fable_blocked_until": None,
@@ -626,7 +626,10 @@ def set_5h_budget(args):
 
 
 def report_usage(args):
-    """The Usage section of a report: every window the plan meters, by model, as Markdown."""
+    """The Usage section of a report: each window the plan meters as a share of its limit, and the split by model.
+
+    Percentages only: the plan's limits are percentages, and the dollar figures are only the
+    governor's internal unit for pacing."""
     now = parse_now(args.now)
     usage = load(USAGE, USAGE_DEFAULTS)
     state = load(STATE, STATE_DEFAULTS)
@@ -641,20 +644,24 @@ def report_usage(args):
             for m, v in models.items():
                 by_model[m] = by_model.get(m, 0.0) + float(v)
     total_week = sum(by_model.values()) or pace["used_week_usd"]
-    pct = lambda used, budget: f"{used / budget:.0%}" if budget else "not calibrated"
-    lines = ["| Window | Used | Of | Share |", "| --- | --- | --- | --- |",
-             f"| Last 5 hours | ${five_h:.2f} | ${float(five_budget):.2f} | {pct(five_h, five_budget)} |" if five_budget
-             else f"| Last 5 hours | ${five_h:.2f} | not calibrated | |",
-             f"| Today | ${pace['today_used_usd']:.2f} | ${pace['today_share_usd']:.2f} (today's share) | {pct(pace['today_used_usd'], pace['today_share_usd'])} |",
-             f"| This week (resets {end:%a %b %-d, %-I:%M %p}) | ${pace['used_week_usd']:.2f} | ${pace['budget_usd']:.2f} | {pct(pace['used_week_usd'], pace['budget_usd'])} |",
-             f"| Fable this week | ${fable['fable_week_usd']:.2f} | ${fable['fable_allowance_usd']:.2f} | {pct(fable['fable_week_usd'], fable['fable_allowance_usd'])} |",
-             "", "| Model | This week | Share |", "| --- | --- | --- |"]
+
+    def share(used, limit, of):
+        return f"{used / float(limit):.0%} of {of}" if limit else "not calibrated yet"
+
+    reset = f"{end:%a %b} {end.day}, {int(end.strftime('%I'))}:{end:%M %p}"
+    lines = ["| Window | Used |", "| --- | --- |",
+             f"| Last 5 hours | {share(five_h, five_budget, 'the 5-hour limit')} |",
+             f"| Today | {share(pace['today_used_usd'], pace['today_share_usd'], 'the daily pace')} |",
+             f"| This week | {share(pace['used_week_usd'], pace['budget_usd'], 'the weekly limit')} (resets {reset}) |",
+             f"| Fable this week | {share(fable['fable_week_usd'], fable['fable_allowance_usd'], 'its weekly allowance')} |",
+             "", "| Model | Share of this week's usage |", "| --- | --- |"]
     for m in ("fable", "opus", "sonnet", "haiku"):
         v = by_model.get(m, 0.0)
-        lines.append(f"| {m.capitalize()} | ${v:.2f} | {v / total_week:.0%} |" if total_week else f"| {m.capitalize()} | ${v:.2f} | |")
+        lines.append(f"| {m.capitalize()} | {v / total_week:.0%} |" if total_week else f"| {m.capitalize()} | 0% |")
     notes = []
     if until_active(usage, "rate_limit_until", now):
-        notes.append(f"Sessions paused until {parse_now(usage['rate_limit_until']):%a %-I:%M %p} (limit reached).")
+        until = parse_now(usage["rate_limit_until"])
+        notes.append(f"Sessions paused until {until:%a} {int(until.strftime('%I'))}:{until:%M %p} (limit reached).")
     if not fable["fable_ok"]:
         notes.append("Fable is paused until the week resets.")
     if notes:

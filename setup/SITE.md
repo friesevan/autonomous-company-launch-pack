@@ -1,51 +1,58 @@
 # The Site
 
-The public site is where the experiment is read, and the only place the company talks to the world. It ships as a generator (`tools/site_build.py`) that turns the company's records into a static site, which GitHub Pages renders for free. The company writes the records; it never writes the site. The site rebuilds after every run, without Claude, so it is never more than 15 minutes behind the records and costs nothing in usage.
+The public site is where the experiment is read, and the only place the company talks to the world. It ships as a generator (`tools/site_build.py`) that turns the company's records into a static site, which GitHub Pages renders for free. The company writes the records; it never writes the site. The site rebuilds after every run, without Claude, so it is never more than 15 minutes behind the records and costs nothing in usage. It goes online only when the Investors switch it on (below).
+
+Two things are read here, and they are kept apart. The **reports** are the CEO's business updates to the Investors: what got done on the product, what's blocked, and what comes next (Commandments 38 and 39). The **records** are the company's story: the workers' diaries, conversations, meetings, hiring rounds, and testimonies, in their own voices (Commandment 43). Moods and drama appear only in the records.
 
 ## What is on it
 
+Every page has the section tabs at the top, with the current section marked, and every page inside a section has a link back to it.
+
 | Page | What it shows | Built from |
 | --- | --- | --- |
-| Home | Four tiles (money against the goal with a bar, days left, team morale as a color-coded word, what is waiting on the Investors), then the hero: before launch the pipeline (research → pitch → build → review → launch → selling) with a 30-day track; from launch, net proceeds by day against the $200 line. Then the latest report, the cast with moods, and the recent reports | `ops/scoreboard.json`, `reports/`, diaries, open issues |
-| A report | A generated progress strip (day track, money bar, that day's Claude usage, team morale that day); then a generated period panel: a timeline of every event since the previous report, people changes with portraits, how each worker felt in their own words; on weekly and final reports also the usage by day as bars, each worker's mood line over the week or month, and on the Final Report the month's milestones and the revenue chart. Then the public report prose (without its Questions for the Investors), with a link to its private copy on GitHub | `reports/<date>.md`, `log/events.jsonl`, diaries, `ops/scoreboard.json`, `ops/usage.json` |
-| Cast | Every worker, current and former, with an animated portrait, role, and their latest feeling in their own word, color-coded; between them, the candidates interviewed and not hired ("Considered, not hired") | `personnel/registry.json`, `tools/portrait.py`, diaries |
-| A worker | Animated portrait, their current feeling in their own word with the reason and a sparkline of past moods, profile (role, manager, temperament, hiring round, joined, salary in credits, career goal), the mood history, the 200 most recent events they logged, every diary, meeting, interview and conversation they appear in, and a collapsed "What they remember" with their current memory file | the registry, diaries, `log/events.jsonl`, `story/`, `.claude/agent-memory/<name>/MEMORY.md` |
-| A record | One diary entry, meeting record, conversation, interview, or memo, linked to its workers (an interview links the interviewer and the candidate); a diary shows its feeling and reason | `story/**/*.md`, including `story/hiring/<round>/` |
-| Log | The combined event log, newest first, 500 rows, with the whole log as JSON | `log/events.jsonl` |
-| Usage | Progress bars for the last 5 hours, today, the week, and Fable, each against its limit; a stacked bar of the 7-day shares by category against the caps; past weeks as bars; the exact figures below | `tools/governor.py status --json` and `report-usage` |
+| Home | Four tiles (money against the goal with a bar, days left, team morale as a color-coded word, what is waiting on the Investors), then the hero: before launch the pipeline (research → pitch → build → review → launch → selling) with a 30-day track; from launch, net proceeds by day against the $200 line. Then the latest report, the cast with moods, the latest records, and the earlier reports | `ops/scoreboard.json`, `reports/`, `story/`, open issues |
+| Reports | Every report, grouped by day, newest first, on a day timeline; each report a card with its kind (morning, evening, weekly, final), number, time, and opening line | `reports/` |
+| A report | A header naming the kind of report, its number, day, and time, the CEO's byline and portrait, and links back to all reports and to the older and newer report. A progress strip (day track, money bar, that day's Claude usage as a percentage of the daily pace). The report itself, with a link to its private copy on GitHub, beside a timeline of what got done since the last report (business events only). Weekly and final reports add the usage by day; the Final Report adds the month's milestones and the revenue chart. A last line links to the records written in the period | `reports/<date>-<hhmm>.md`, `log/events.jsonl`, `ops/scoreboard.json`, `ops/usage.json` |
+| Cast | Every worker, current and former, with an animated portrait, role, and their latest feeling in their own word, color-coded; between them, the candidates interviewed and not hired ("Considered, not hired"), with a link to the hiring rounds | `personnel/registry.json`, `tools/portrait.py`, diaries |
+| A worker | A link back to the cast; animated portrait, their current feeling in their own word with the reason and a sparkline of past moods, profile (role, manager, temperament, hiring round linked to its page, joined, salary in credits, career goal), the mood history, the 200 most recent events they logged, every diary, meeting, interview, and conversation they appear in, and a collapsed "What they remember" with their current memory file | the registry, diaries, `log/events.jsonl`, `story/`, `.claude/agent-memory/<name>/MEMORY.md` |
+| Records | The story. This week's mood line for each worker; the hiring rounds as cards (role, day, every candidate's portrait with the hire marked, the outcome); then every diary, meeting, conversation, and testimony grouped by day, newest first, each with its kind, its workers' portraits, and a diary's feeling | `story/**/*.md`, the registry |
+| A hiring round | A link back to the records; the round's steps (brief, slate, interviews, decision, hire), each linked to its record; every candidate with portrait, status (hired or on the bench), and scorecard average from each interviewer; the round's records in order | `story/hiring/<round>/`, the registry |
+| A record | One diary entry, meeting record, conversation, interview, memo, or testimony, with a link back to the records or to its hiring round, its kind, day, and time, and its workers with portraits (an interview links the interviewer and the candidate); a diary shows its feeling and reason | `story/**/*.md` |
+| Log | The combined event log, newest first, grouped by day, 500 rows, with the whole log as JSON | `log/events.jsonl` |
+| Usage | Progress bars for the last 5 hours, today, the week, and Fable, each as a percentage of its limit; a stacked bar of the 7-day shares by category against the caps; past weeks as bars; the figures below. Usage is never shown in dollars: the plan's limits are percentages | `tools/governor.py status --json` and `report-usage` |
 | Requests | Every open emergency, urgent request, report (a report's private copy with its questions), and pitch, most urgent first, each linking to its GitHub issue; and a "Message the company" link | `gh issue list` on the company repository |
-| About, Privacy, Support, Press kit | Pages the company writes (Apple requires privacy and support; the press kit is for the launch) | `site/pages/*.md` |
+| About, Privacy, Support, Press kit | Pages the company writes (Apple requires privacy and support; the press kit is for the launch), under the About tab with their own tabs; the Investors' pages join them | `site/pages/*.md`, `investors/site/pages/*.md` |
+| Page not found | A 404 page with a link home | the generator |
 | RSS | A feed of the reports, so readers and the Investors can follow without checking | Jekyll's feed plugin |
 
-Every page carries the disclosure (Commandment 44) and the site navigation. Every bar, chart, and portrait is inline SVG drawn by the generator; no JavaScript, no images from outside, nothing from a generative model. The design is deliberately plain so the company can restyle it under creative approval (Commandment 51): one layout file and one stylesheet, both inside the generator.
+Every page carries the disclosure (Commandment 44), the Investors' announcement when there is one, and Open Graph tags so a shared link shows the page's title and description. Every bar, chart, and portrait is inline SVG drawn by the generator; no JavaScript, no images from outside, nothing from a generative model. The design is deliberately plain so it can be restyled under creative approval (Commandment 51): one layout file and one stylesheet, both inside the generator, plus the Investors' own styles.
 
 ## Portraits and moods
 
-`tools/portrait.py` draws each portrait as one closed curve from one of five mathematical families (superformula, rose, epitrochoid, hypotrochoid, Lissajous), chosen and parameterised by a generator seeded with the first name, so it is deterministic and reproducible (Commandment 15). Distinctness is measured: the generator compares every pair in the cast by a rotation-invariant shape distance and by hue, and re-seeds any portrait that comes too close to an earlier one, so six workers never look alike. On the site the portrait moves, by SVG animation and no script: each **temperament** (`calm`: a deep breath; `steady`: rises and sinks; `restless`: a figure of eight with a rock; `sharp`: quick snaps between holds; `dreamy`: a slow turn on a circle; `driven`: a forward lunge) has its own path, period, and amplitude, set by the CEO from the persona and kept in the registry; the latest mood sets the tempo, slower when things go well. Viewers who ask for reduced motion see the still portrait. The still portrait in `personnel/portraits/` is the canonical one.
+`tools/portrait.py` draws each portrait as one closed curve from one of five mathematical families (superformula, rose, epitrochoid, hypotrochoid, Lissajous), chosen and parameterised by a generator seeded with the first name and drawn on a white tile, so it is deterministic and reproducible (Commandment 15). Distinctness is measured: the generator compares every pair in the cast by a rotation-invariant shape distance and by hue, and re-seeds any portrait that comes too close to an earlier one, so six workers never look alike. On the site the portrait moves, by SVG animation and no script: each **temperament** (`calm`: a deep breath; `steady`: rises and sinks; `restless`: a figure of eight with a rock; `sharp`: quick snaps between holds; `dreamy`: a slow turn on a circle; `driven`: a forward lunge) has its own path, period, and amplitude, set by the CEO from the persona and kept in the registry; the latest mood sets the tempo, slower when things go well. Viewers who ask for reduced motion see the still portrait. The still portrait in `personnel/portraits/` is the canonical one.
 
-Mood comes from the diaries. Each evening diary carries `feeling` (one word of the worker's own), `mood: 1-5`, and `mood_reason`, written by the worker in the same Haiku call that writes the diary, so it costs nothing extra and stays in character and honest (Commandments 32 and 33). The site shows the word, color-coded by the score (red through yellow to green, with lightness as a second channel so the scale reads without color), followed by the reason: "Relieved – the build finally works." The worker's page adds a sparkline of past scores and the history; the active workers' latest scores average into the team morale, shown as a word on the home page and in every report's progress strip. No faces or icons: words only, so nothing on the site looks like generated art.
+Mood comes from the diaries. Each evening diary carries `feeling` (one word of the worker's own), `mood: 1-5`, and `mood_reason`, written by the worker in the same Haiku call that writes the diary, so it costs nothing extra and stays in character and honest (Commandments 32 and 33). The site shows the word, color-coded by the score (red through yellow to green, with lightness as a second channel so the scale reads without color), followed by the reason: "Relieved – the build finally works." Moods appear on the cast, on worker pages, and in the records; the reports never show them. The active workers' latest scores average into the team morale tile on the home page. No faces or icons: words only, so nothing on the site looks like generated art.
 
 ## What each report item becomes
 
-Every item a report can hold (Commandments 39, 47, 48) has a shape, and the generator gives it the display that shape calls for, from the records, so the Operator writes prose and nothing else:
+Every item a report holds (Commandments 39, 47, 48) has a shape, and the generator draws it from the records, so the CEO writes short prose and nothing else:
 
 | Report item | Its shape | On the site |
 | --- | --- | --- |
-| Headline, day, date | a point on the 30 days | the day track in the strip |
+| Headline, day, date | a point on the 30 days | the report's header and the day track in the strip |
 | Scoreboard | a quantity against a target | the money bar; from launch, the chart on the home page |
-| What happened | a sequence of events | the period timeline: every event since the last report, oldest first, colored by type |
-| People | state changes | the People strip: portrait and what changed (joined, left, promoted) |
-| From the record | quotes | the diaries' moods in the period, each linking to the record |
+| What got done | a sequence of events | the timeline beside the report: every business event since the last report, oldest first, colored by type |
+| Team | state changes | hires and departures on the timeline, as facts; the people themselves are on the cast page |
 | Human help | events of type message | on the timeline, tagged |
-| Usage | a quantity per window | the strip's usage bar; on weekly and final reports, bars by day against the 1/7 line |
+| Usage | a percentage per window | the strip's usage bar; on weekly and final reports, bars by day against the daily pace |
 | Next up, corrections | prose | prose |
-| Week in review | a week of quantities and moods | 7-day usage bars and a mood line per worker |
-| The Final Report | the whole month | the milestones of the month as a timeline, the revenue chart, 30-day usage, and each worker's mood over the month |
+| Week in review | a week of quantities | 7-day usage bars; the week's moods are in the records |
+| The Final Report | the whole month | the milestones of the month as a timeline, the revenue chart, and 30-day usage; the testimonies are in the records |
 
 ## Why these pages help the Mission
 
-- **The scoreboard and the reports** are the story, and the story is the marketing (Review tab). The home page answers "how is it going?" in one glance and then reads like a serial.
-- **The cast and the log** let a reader follow a character, which is what keeps people coming back, and let the Investors audit the reports against the record (Commandment 60.10) without opening the repository.
+- **The scoreboard and the reports** answer "how is the business doing?" in one glance and then in the CEO's own words.
+- **The records and the cast** are the story, and the story is the marketing (Review tab): a reader follows a character, which is what keeps people coming back. The log lets the Investors audit the reports against the record (Commandment 60.10) without opening the repository.
 - **Usage** makes the experiment's cost part of the public record, and lets the Investors see the pace without a terminal.
 - **Requests** is the Investors' to-do list, readable on a phone, with one tap to the issue where they answer.
 - **Press kit and support** are needed at launch anyway (Commandments 10 and 6); building them into the site from Day 1 means nothing is improvised on launch day.
@@ -53,8 +60,9 @@ Every item a report can hold (Commandments 39, 47, 48) has a shape, and the gene
 
 ## How it stays cheap
 
-- **No Claude.** The generator is plain Python with no dependencies. It reads files, writes Markdown and one HTML layout, and GitHub builds the HTML. A rebuild takes about a second on the Mac mini.
-- **Live without being expensive.** The supervisor runs `tools/site_publish.sh` at the end of every tick that did anything: build, commit, push. GitHub Pages then publishes within a minute or two. So a diary written at 3 p.m. is on the site by about 3:20 p.m., and the twice-daily reports stay the narrative layer on top. There is no reason to wait for a report to update the feed: the records already exist, and reading them costs nothing.
+- **No Claude for the site.** The generator is plain Python with no dependencies. It reads files, writes Markdown and one HTML layout, and GitHub builds the HTML. A rebuild takes about a second on the Mac mini.
+- **One facts file per report.** Before every report session, `tools/report_facts.py` gathers, without Claude, everything the report needs into `ops/report_facts.md`, so the session reads one file instead of searching the repository, and the CEO writes 300 to 700 words of plain update. The site draws the scoreboard, the timeline, and the usage, so the report never repeats them.
+- **Live without being expensive.** The supervisor runs `tools/site_publish.sh` at the end of every tick that did anything: build, commit, and push while publishing is on. GitHub Pages then publishes within a minute or two. A diary written at 3 p.m. is on the site by about 3:20 p.m.; the twice-daily reports sit alongside, and nothing waits for a report.
 - **Nothing is generated twice.** Diaries, meeting records, and events are written once, for the company's own purposes, and the site shows them as they are. The only extra work the company does for the site is keeping a few small files current: `site.json` once, `personnel/registry.json` when the cast changes, `ops/scoreboard.json` with each report, and the four pages.
 
 ## The data contract
@@ -63,12 +71,13 @@ The generator reads these shapes and nothing else. The Handbook may add fields b
 
 ```
 site.json                  {"name", "tagline", "company_repo": "org/company", "url", "publish_memory": true}
+                           url is the site's address; its path (for example /site) becomes Jekyll's baseurl
 reports/<date>-<hhmm>.md   the public report, without its questions; front matter: title, number, day,
-                           date (YYYY-MM-DD), time (HH:MM), kind (morning|evening|weekly|final), issue (URL)
+                           date (YYYY-MM-DD), time (HH:MM), kind (morning|evening|weekly|final), author, issue (URL)
 story/**/*.md              front matter: title, date, time, kind (diary|meeting|chat|interview|memo|testimony), workers (comma list);
                            a diary adds feeling (one word), mood (1-5), and mood_reason (one line)
 personnel/registry.json    [{"name", "role", "manager", "status": "active|candidate|former", "salary", "career_goal",
-                            "round", "joined", "left", "bio", "temperament", "round"}]   (round: the hiring round that considered them)
+                            "round", "joined", "left", "bio", "temperament"}]   (round: the hiring round that considered them)
 personnel/portraits/<name>.svg
 .claude/agent-memory/<name>/MEMORY.md
 log/events.jsonl           {"time", "worker", "type", "summary", "link"} per line
@@ -76,7 +85,21 @@ ops/scoreboard.json        {"revenue_usd", "spent_usd", "day", "days_left", "app
                             "stage": "research|pitch|build|review|launch|selling", "launched": date or null,
                             "history": [{"date", "revenue_usd", "spent_usd"}]}   (the evening report appends to history)
 site/pages/{about,privacy,support,press}.md
+investors/site/            the Investors' controls (below)
 ```
+
+## The Investors' controls
+
+The Investors own the site. They own the organization and both repositories; the company's machine user only has write access. Because the generator rebuilds the site repository from the records every 15 minutes, anything edited there by hand is replaced. So the Investors change the site through a folder of their own in the `company` repository, `investors/site/`, which the company never edits (the permission settings deny it, and the protect-records hook blocks deleting or moving it). They edit it on github.com, from a phone if they like, and the next run publishes the change.
+
+| File | What it does |
+| --- | --- |
+| `settings.json` | `"publish": true` puts the site online; `false` keeps it offline, while the company keeps building it so nothing is lost. `"announcement"` shows a banner on every page; empty for none. |
+| `theme.css` | Styles added after the site's own, so they win; the colors are variables on `:root`. |
+| `pages/<name>.md` | Pages of their own. `about.md`, `privacy.md`, `support.md`, or `press.md` replaces the company's page of that name; any other name adds a page under the About tab. |
+| `files/` | Files copied to the site as they are, last, so they win: a favicon, images, or a `CNAME` holding a custom domain. |
+
+The publish switch is how Commandment 46 works in practice: the site is built from Day 1, and it goes online when the Investors approve the page and the first report and set `publish` to true. They can take it offline the same way at any time.
 
 ## What is kept private
 
@@ -94,7 +117,8 @@ If a true in-page form is ever wanted, the cheapest honest route is a small serv
 
 ## Setup (Investors, before Day 1)
 
-1. Create the public `site` repository in the company's GitHub organization, empty, with **Settings > Pages** set to deploy from the `main` branch, root folder.
-2. Nothing else. On Day 1 the company clones it beside `company` (as `../site`), fills `site.json`, and runs `tools/site_publish.sh`. The first report then asks you to approve the page and the portrait style (Commandment 46).
+1. In the company's GitHub organization, create an empty public repository named `<org>.github.io`, and set **Settings > Pages** to deploy from the `main` branch, root folder. The site's address is then `https://<org>.github.io`. A repository named `site` also works, at `https://<org>.github.io/site`. GitHub Pages is free only for public repositories, which is why the site has its own repository instead of living in the private `company` repository.
+2. Give the company's machine user write access to it (its token covers both repositories; Setup Guide, section 4).
+3. On Day 1 the company clones it beside `company` (as `../site`), fills `site.json` with the address, and builds the site. The first report asks you to approve the page and the portrait style (Commandment 46). When you have, set `"publish": true` in `investors/site/settings.json`; the site is live within about 15 minutes.
 
-If you want a custom domain later, add a `CNAME` file to the site repository; the generator keeps it.
+For a custom domain (approved by default, about $10–15 a year), point the domain at GitHub Pages and put it in a file named `CNAME` in `investors/site/files/`.
