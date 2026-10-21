@@ -143,7 +143,7 @@ def cell(s):
 def fmt_time(iso):
     try:
         d = dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
-        return d.strftime("%b %-d, %H:%M")
+        return f"{d:%b} {d.day}, {d:%H:%M}"
     except ValueError:
         return str(iso)[:16]
 
@@ -309,7 +309,7 @@ def rail(events, by_slug, limit=40):
         link = f' <a href="{esc(e["link"])}">link</a>' if e.get("link") and e["link"] != "(private)" else ""
         t = event_time(e)
         out.append(f'<li class="t-{esc(e.get("type", ""))}"><time>{t.strftime("%a %H:%M") if t else ""}</time>'
-                   f'<span class="tag">{esc(e.get("type", ""))}</span> <b>{who}</b> {esc(e.get("summary", ""))}{link}</li>')
+                   f'<span class="tag t-{esc(e.get("type", ""))}">{esc(e.get("type", ""))}</span> <b>{who}</b> {esc(e.get("summary", ""))}{link}</li>')
     out.append("</ol>")
     return "".join(out)
 
@@ -374,6 +374,116 @@ def small_multiples(workers, moods, start_day, end_day, day_of):
     return f'<div class="minis">{"".join(cards)}</div>' if cards else ""
 
 
+# ---------- navigation and page structure ----------
+
+REPORT_KINDS = {"morning": ("Morning", "amber"), "evening": ("Evening", "blue"), "weekly": ("Weekly", "green"), "final": ("Final", "pink")}
+RECORD_KINDS = {"diary": ("Diary", "pink"), "meeting": ("Meeting", "amber"), "chat": ("Conversation", "green"),
+                "interview": ("Interview", "blue"), "memo": ("Memo", "grey"), "testimony": ("Testimony", "blue")}
+STATUS_BADGES = {"active": ("Working here", "green"), "candidate": ("On the bench", "grey"), "former": ("Former worker", "grey")}
+
+
+def safe(s):
+    """Escape company-written text for HTML that Jekyll's Liquid also reads, so braces stay text."""
+    return esc(s).replace("{", "&#123;").replace("}", "&#125;")
+
+
+def badge(label, tone):
+    return f'<span class="kind {tone}">{esc(label)}</span>'
+
+
+def report_badge(kind, suffix=""):
+    label, tone = REPORT_KINDS.get(kind, (str(kind or "report").title(), "grey"))
+    return badge(label + suffix, tone)
+
+
+def record_badge(kind):
+    label, tone = RECORD_KINDS.get(kind, (str(kind or "record").title(), "grey"))
+    return badge(label, tone)
+
+
+def crumbs(back_path, back_label, right=""):
+    """The back link at the top of a page inside a section, with optional links on the right."""
+    return (f'<div class="crumbs" role="navigation" aria-label="Back"><a class="back" href="{rel(back_path)}">'
+            f'← {safe(back_label)}</a>{right}</div>\n')
+
+
+def page_head(kicker, title, sub=""):
+    return f'<div class="page-head"><div class="kicker">{kicker}</div><h1>{title}</h1>{sub}</div>'
+
+
+def split_title(title):
+    """'Report 6 — Hana joins' gives ('Report 6', 'Hana joins'); a title without a dash is all headline."""
+    parts = re.split(r"\s+[—–-]\s+", str(title), maxsplit=1)
+    lead, head = (parts[0], parts[1]) if len(parts) == 2 else ("", parts[0])
+    return lead, head[:1].upper() + head[1:]
+
+
+def nice_date(date_s):
+    try:
+        d = dt.date.fromisoformat(str(date_s)[:10])
+    except ValueError:
+        return str(date_s)
+    return f"{d:%a} {d:%b} {d.day}"
+
+
+def excerpt(body, limit=170):
+    """The first plain paragraph of a report's Summary (or of the report), as one line of text."""
+    m = re.search(r"^#{2,}\s*Summary\s*$", body, flags=re.M | re.I)
+    text = body[m.end():] if m else body
+    for para in re.split(r"\n\s*\n", text):
+        p = para.strip()
+        if not p or p.startswith(("#", "|", ">", "<", "```", "{%")) or re.match(r"([-*+]|\d+\.)\s", p):
+            continue
+        p = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", p)
+        p = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", p)
+        p = re.sub(r"<[^>]+>|[*_`]", "", p)
+        p = re.sub(r"\s+", " ", p).strip()
+        if len(p) > limit:
+            p = p[:limit].rsplit(" ", 1)[0].rstrip(",.;:") + "…"
+        return p
+    return ""
+
+
+def avatars(slugs, by_slug, cls="avatar"):
+    out = []
+    for slug in slugs:
+        if slug in by_slug:
+            n = esc(by_slug[slug]["name"])
+            out.append(f'<img class="{cls}" src="{rel("/assets/portraits/" + slug + ".svg")}" alt="{n}" title="{n}">')
+    return "".join(out)
+
+
+def person_chips(slugs, by_slug):
+    items = []
+    for slug in slugs:
+        if slug in by_slug:
+            w = by_slug[slug]
+            items.append(f'<a class="person" href="{rel("/cast/" + slug + ".html")}"><img src="{rel("/assets/portraits/" + slug + ".svg")}" alt="">'
+                         f'<b>{esc(w["name"])}</b><small>{safe(w.get("role", ""))}</small></a>')
+        else:
+            items.append(f'<span class="person"><b>{esc(slug)}</b></span>')
+    return f'<div class="people">{"".join(items)}</div>' if items else ""
+
+
+def scorecard_mean(body):
+    """The mean of the numeric scores in a record's '## Scorecard' table, or None."""
+    m = re.search(r"^##\s+Scorecard\s*$", body, flags=re.M | re.I)
+    if not m:
+        return None
+    scores = []
+    for line in body[m.end():].splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            if scores:
+                break
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        mm = re.fullmatch(r"(\d+(?:\.\d+)?)(?:\s*/\s*\d+)?", cells[-1]) if cells else None
+        if mm:
+            scores.append(float(mm.group(1)))
+    return sum(scores) / len(scores) if scores else None
+
+
 # ---------- readers ----------
 
 def load_config():
@@ -412,7 +522,7 @@ def load_story(scrub):
         meta.setdefault("title", os.path.splitext(os.path.basename(path))[0].replace("-", " "))
         meta["workers"] = [w.strip().lower() for w in re.split(r"[,\s]+", meta.get("workers", "")) if w.strip()]
         meta["when"] = when(meta)
-        meta["path"] = os.path.splitext(rel_path)[0]
+        meta["path"] = os.path.splitext(rel_path)[0].replace(os.sep, "/")
         meta["body"] = scrub(body)
         try:
             meta["mood"] = int(meta.get("mood", "")) if str(meta.get("mood", "")).strip() else None
@@ -538,15 +648,26 @@ LAYOUT = """<!DOCTYPE html>
 <meta name="description" content="{{ page.description | default: site.description }}">
 {% feed_meta %}
 <style>
-:root{--ink:#1b1b1b;--muted:#5f5f5f;--line:#e4e4e4;--bg:#fff;--accent:#2b5bd7;--soft:#f4f5f8;--ok:#2f9e5b;--warm:#d9a21b;--hot:#d9442b;--pink:#c04fb0}
-@media (prefers-color-scheme:dark){:root{--ink:#ececec;--muted:#a8a8a8;--line:#333;--bg:#111;--accent:#8ab0ff;--soft:#1b1b1b;--ok:#4fc27a;--warm:#e6b94a;--hot:#ef6a52;--pink:#e07bd2}}
+:root{--ink:#1b1b1b;--muted:#5f5f5f;--line:#e4e4e4;--bg:#fff;--accent:#2b5bd7;--soft:#f4f5f8;--ok:#2f9e5b;--warm:#d9a21b;--hot:#d9442b;--pink:#c04fb0;--seg:#fff;--portrait:#fff;--blue-bg:#dfe7ff;--blue-fg:#1d3d99;--amber-bg:#fbe3a6;--amber-fg:#4a3200;--green-bg:#d3f0de;--green-fg:#0f4a2a;--pink-bg:#f7d9f0;--pink-fg:#6a1f5e;--grey-bg:#e9eaee;--grey-fg:#3d3f46}
+@media (prefers-color-scheme:dark){:root{--ink:#ececec;--muted:#a8a8a8;--line:#333;--bg:#111;--accent:#8ab0ff;--soft:#1b1b1b;--ok:#4fc27a;--warm:#e6b94a;--hot:#ef6a52;--pink:#e07bd2;--seg:#2c2f36;--blue-bg:#1d2b4f;--blue-fg:#c3d3ff;--amber-bg:#4a3a12;--amber-fg:#ffe0a0;--green-bg:#163a26;--green-fg:#a6e6c0;--pink-bg:#44203e;--pink-fg:#f5c2ea;--grey-bg:#2a2b30;--grey-fg:#c9cad0}}
 *{box-sizing:border-box}body{margin:0;font:17px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
-a{color:var(--accent)}header,main,footer{max-width:960px;margin:0 auto;padding:0 18px}
-header{padding-top:22px;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 22px}header .brand{font-weight:800;font-size:22px;letter-spacing:-.01em;text-decoration:none;color:var(--ink)}
-nav a{margin-right:16px;font-size:15px;text-decoration:none}nav a:hover{text-decoration:underline}
-.notice{flex-basis:100%;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:9px 14px;margin:14px 0 0;font-size:13.5px;color:var(--muted)}
-h1{font-size:34px;letter-spacing:-.02em;margin:18px 0 8px}h2{font-size:22px;margin:30px 0 10px}h3{font-size:17px;margin:22px 0 8px}
+a{color:var(--accent)}header.site,main,footer{max-width:960px;margin:0 auto;padding:0 18px}
+header.site{padding-top:22px}header.site .brand{font-weight:800;font-size:22px;letter-spacing:-.01em;text-decoration:none;color:var(--ink)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin:12px 0 0;padding:4px;background:var(--soft);border:1px solid var(--line);border-radius:14px}
+.tabs a{padding:7px 13px;border-radius:10px;font-size:15px;font-weight:600;color:var(--muted);text-decoration:none}.tabs a:hover{color:var(--ink)}
+.tabs a[aria-current]{background:var(--seg);color:var(--ink);font-weight:700;box-shadow:inset 0 -3px 0 var(--accent),0 1px 3px rgba(0,0,0,.14),0 0 0 1px var(--line)}
+.tabs a:focus-visible,.subtabs a:focus-visible,.card:focus-visible,.rec:focus-visible,.pager a:focus-visible,.crumbs a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.notice{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:9px 14px;margin:12px 0 0;font-size:13.5px;color:var(--muted)}
+h1{font-size:34px;letter-spacing:-.02em;margin:18px 0 8px;text-wrap:balance}h2{font-size:22px;margin:30px 0 10px}h3{font-size:17px;margin:22px 0 8px}
 .lead{font-size:19px;color:var(--muted);margin:0 0 18px}
+.crumbs{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 16px;margin:20px 0 0;font-size:15px}
+.crumbs a{text-decoration:none;font-weight:600}.crumbs a:hover{text-decoration:underline}.crumbs .step{display:flex;gap:16px}
+.page-head{flex:1;min-width:0;margin:6px 0 18px}.page-head h1{margin:8px 0 6px}.page-head .people{margin-top:12px}.page-head .mood{margin:12px 0 0}
+.kicker{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:14px;color:var(--muted)}.kicker .num{font-weight:700;color:var(--ink)}
+.kind{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.kind.blue{background:var(--blue-bg);color:var(--blue-fg)}.kind.amber{background:var(--amber-bg);color:var(--amber-fg)}.kind.green{background:var(--green-bg);color:var(--green-fg)}
+.kind.pink{background:var(--pink-bg);color:var(--pink-fg)}.kind.grey{background:var(--grey-bg);color:var(--grey-fg)}
+.person-head{display:flex;gap:18px;align-items:flex-start;justify-content:space-between}
 .hero{display:grid;grid-template-columns:1fr;gap:16px;margin:12px 0 22px}.panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:0 0 16px}
 .tile{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:14px 16px}.tile b{display:block;font-size:26px;letter-spacing:-.02em}.tile span{font-size:13.5px;color:var(--muted)}
@@ -563,36 +684,74 @@ h1{font-size:34px;letter-spacing:-.02em;margin:18px 0 8px}h2{font-size:22px;marg
 .chart{width:100%;height:auto;display:block}.chart .lbl{font-size:11px;fill:var(--muted)}.chart .lbl.strong{fill:var(--ink);font-weight:700;font-size:12px}
 .stack{display:flex;height:16px;border-radius:8px;overflow:hidden;background:var(--line);margin:8px 0 6px}.seg{display:inline-block;height:100%}.seg.project{background:var(--accent)}.seg.reports{background:var(--ok)}.seg.meetings{background:var(--warm)}.seg.hiring{background:var(--pink)}.seg.talk{background:var(--hot)}
 .legend{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 16px}.legend .seg{width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
-.strip{display:grid;grid-template-columns:1fr;gap:4px 18px;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:12px 0 18px;font-size:14px}
+.strip{display:grid;grid-template-columns:1fr;gap:4px 18px;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:0 0 18px;font-size:14px}
 .strip .row{display:flex;align-items:center;gap:12px}.strip .bar{flex:1;margin:4px 0}.strip .track{flex:1}
 table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
-img.portrait{width:120px;height:120px;border-radius:16px;float:right;margin:0 0 12px 18px;background:var(--soft)}
+img.portrait{width:120px;height:120px;border-radius:16px;flex:none;margin-top:6px;background:var(--portrait);border:1px solid var(--line)}
 .cast{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}.cast a{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--soft)}
-.cast img{width:100%;aspect-ratio:1;border-radius:12px;display:block;margin-bottom:8px;background:var(--bg)}.cast small{color:var(--muted);display:block}
+.cast a:hover{border-color:var(--accent)}.cast img{width:100%;aspect-ratio:1;border-radius:12px;display:block;margin-bottom:8px;background:var(--portrait);border:1px solid var(--line)}.cast small{color:var(--muted);display:block}
+.cast a>b{display:block}.cast .kind{margin-top:6px}.cast .score{margin-top:6px;font-size:13px}
 .mood{display:flex;align-items:center;gap:12px;margin:8px 0 14px;flex-wrap:wrap}.mood .why{color:var(--muted);font-size:14.5px}.mood .spark{margin-left:auto}
 .mood-word{font-weight:700;padding:1px 8px;border-radius:8px;white-space:nowrap}.mood-word.big{font-size:20px;padding:2px 10px}.mood-why{color:var(--muted)}
 .mood-word.lv0{color:var(--muted);background:var(--line)}.mood-word.lv1{color:#fff;background:#c43d2b}.mood-word.lv2{color:#2b1a00;background:#e59a3a}.mood-word.lv3{color:#2b2400;background:#e7cf4a}.mood-word.lv4{color:#0f2e1a;background:#7fd19a}.mood-word.lv5{color:#082a12;background:#3fbf6e}
 .cast .mood-word{display:inline-block;margin-top:6px;font-size:13px}
 details{margin:12px 0}summary{cursor:pointer}footer{padding:28px 18px 44px;color:var(--muted);font-size:14px}blockquote{border-left:3px solid var(--line);margin:0;padding-left:12px;color:var(--muted)}
 .tag{font-size:12px;padding:1px 7px;border:1px solid var(--line);border-radius:10px;color:var(--muted);white-space:nowrap}
-.period h3{margin:14px 0 6px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.period h3:first-child{margin-top:0}
+.tag.t-hire,.tag.t-sale,.tag.t-launch,.tag.t-release{background:var(--green-bg);color:var(--green-fg);border-color:transparent}
+.tag.t-decision,.tag.t-pitch,.tag.t-amendment{background:var(--blue-bg);color:var(--blue-fg);border-color:transparent}
+.tag.t-interview,.tag.t-offer,.tag.t-message{background:var(--amber-bg);color:var(--amber-fg);border-color:transparent}
+.tag.t-departure,.tag.t-review{background:var(--pink-bg);color:var(--pink-fg);border-color:transparent}
+.period h3{margin:14px 0 6px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.period h3:first-child{margin-top:0}.period.wide{margin-top:18px}
 .rail{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line)}.rail li{position:relative;margin:0 0 10px;padding-left:12px;font-size:15px}
 .rail li::before{content:"";position:absolute;left:-21px;top:7px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--soft)}
 .rail li.t-hire::before,.rail li.t-sale::before,.rail li.t-launch::before{background:var(--ok)}.rail li.t-departure::before{background:var(--hot)}.rail li.t-decision::before{background:var(--pink)}
 .rail time{display:inline-block;min-width:76px;color:var(--muted);font-size:13px}
-.people{display:flex;flex-wrap:wrap;gap:12px}.person{display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--bg)}.person img{width:40px;height:40px;border-radius:8px}.person small{color:var(--muted)}
+.people{display:flex;flex-wrap:wrap;gap:12px}.person{display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--bg)}
+.person img{width:40px;height:40px;border-radius:8px;background:var(--portrait);border:1px solid var(--line)}.person small{color:var(--muted)}
 .moods{list-style:none;padding:0;margin:0}.moods li{margin:6px 0}
 .chart.small .lbl{font-size:10px}.d-ok{fill:var(--ok)}.d-warm{fill:var(--warm)}.d-hot{fill:var(--hot)}
 .minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}.mini{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px}.mini .spark{margin-left:auto}
+.report-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px 28px;align-items:start}.report-main{min-width:0}.report-main>:first-child{margin-top:0}
+.callout{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;background:var(--soft);font-size:15px;margin:20px 0}
+.pager{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:30px 0 6px}
+.pager a{display:block;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--soft);text-decoration:none;font-size:13.5px;color:var(--muted)}
+.pager a b{display:block;margin-top:2px;font-size:15.5px;color:var(--ink)}.pager a:hover{border-color:var(--accent)}.pager .next{grid-column:2;text-align:right}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin:10px 0 0}.cards.one{grid-template-columns:minmax(0,1fr)}.day .cards{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.card{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--soft);text-decoration:none;color:inherit}
+.card:hover{border-color:var(--accent)}.card .meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13.5px;color:var(--muted)}
+.card b{font-size:17px;line-height:1.3;text-wrap:balance}.card p{margin:0;font-size:14.5px;line-height:1.45;color:var(--muted)}
+.days{margin:8px 0 0 6px;padding-left:22px;border-left:2px solid var(--line)}
+.day{position:relative;margin:0 0 28px}.day::before{content:"";position:absolute;left:-31px;top:8px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+.day-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:0 0 10px;font-size:20px}.day-head small{font-size:14px;font-weight:400;color:var(--muted)}
+.day-mood{margin-left:auto;font-size:13.5px;font-weight:400;color:var(--muted)}
+.recs{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}
+.rec{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--soft);text-decoration:none;color:inherit}
+.rec:hover{border-color:var(--accent)}.rec b{flex:1 1 200px;min-width:0;font-size:15.5px;color:var(--ink)}.rec time{font-size:13px;color:var(--muted);white-space:nowrap}
+.avatars{display:inline-flex;flex-wrap:wrap;gap:4px}img.avatar{width:28px;height:28px;border-radius:7px;background:var(--portrait);border:1px solid var(--line)}
+.card .avatars img.avatar{width:36px;height:36px;border-radius:8px}img.avatar.hired{outline:2px solid var(--ok);outline-offset:1px}
+.subtabs{display:flex;flex-wrap:wrap;gap:4px 22px;margin:20px 0 0;border-bottom:1px solid var(--line)}
+.subtabs a{padding:6px 0 9px;margin-bottom:-1px;border-bottom:3px solid transparent;text-decoration:none;font-weight:600;color:var(--muted)}
+.subtabs a[aria-current]{color:var(--ink);border-bottom-color:var(--accent)}
 .reports{list-style:none;padding:0}.reports li{margin:8px 0}.latest{font-size:15px;color:var(--muted);margin:6px 0 0}
 @media (min-width:720px){.hero.two{grid-template-columns:3fr 2fr}.strip{grid-template-columns:1fr 1fr}}
+@media (min-width:880px){.report-grid{grid-template-columns:minmax(0,1.65fr) minmax(0,1fr)}}
+@media (max-width:540px){h1{font-size:28px}img.portrait{width:84px;height:84px}.pager{grid-template-columns:1fr}.pager .next{grid-column:1}.tabs a{padding:6px 10px;font-size:14.5px}}
 @media (prefers-reduced-motion:reduce){.bar-fill{transition:none}}
 </style>
 </head>
 <body>
-<header>
+<header class="site">
 <a class="brand" href="{{ '/' | relative_url }}">{{ site.title }}</a>
-<nav><a href="{{ '/' | relative_url }}">Home</a><a href="{{ '/reports/' | relative_url }}">Reports</a><a href="{{ '/cast/' | relative_url }}">Cast</a><a href="{{ '/log/' | relative_url }}">Log</a><a href="{{ '/usage.html' | relative_url }}">Usage</a><a href="{{ '/requests.html' | relative_url }}">Requests</a><a href="{{ '/about.html' | relative_url }}">About</a></nav>
+<nav class="tabs" aria-label="Sections">
+<a href="{{ '/' | relative_url }}"{% if page.section == "home" %} aria-current="true"{% endif %}>Home</a>
+<a href="{{ '/reports/' | relative_url }}"{% if page.section == "reports" %} aria-current="true"{% endif %}>Reports</a>
+<a href="{{ '/cast/' | relative_url }}"{% if page.section == "cast" %} aria-current="true"{% endif %}>Cast</a>
+<a href="{{ '/story/' | relative_url }}"{% if page.section == "records" %} aria-current="true"{% endif %}>Records</a>
+<a href="{{ '/log/' | relative_url }}"{% if page.section == "log" %} aria-current="true"{% endif %}>Log</a>
+<a href="{{ '/usage.html' | relative_url }}"{% if page.section == "usage" %} aria-current="true"{% endif %}>Usage</a>
+<a href="{{ '/requests.html' | relative_url }}"{% if page.section == "requests" %} aria-current="true"{% endif %}>Requests</a>
+<a href="{{ '/about.html' | relative_url }}"{% if page.section == "about" %} aria-current="true"{% endif %}>About</a>
+</nav>
 <div class="notice">{{ site.disclosure }}</div>
 </header>
 <main>
@@ -614,20 +773,20 @@ class Site:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(text)
-        self.written.add(rel_path)
+        self.written.add(os.path.normpath(rel_path).replace(os.sep, "/"))
 
     def copy(self, src, rel_path):
         path = os.path.join(self.out, rel_path)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         shutil.copyfile(src, path)
-        self.written.add(rel_path)
+        self.written.add(os.path.normpath(rel_path).replace(os.sep, "/"))
 
     def clean(self):
         """Remove everything we did not write this time, keeping git's files and a CNAME."""
         for dirpath, dirnames, filenames in os.walk(self.out):
             dirnames[:] = [d for d in dirnames if d != ".git"]
             for name in filenames:
-                r = os.path.relpath(os.path.join(dirpath, name), self.out)
+                r = os.path.relpath(os.path.join(dirpath, name), self.out).replace(os.sep, "/")
                 if r not in self.written and r != "CNAME":
                     os.remove(os.path.join(dirpath, name))
         for dirpath, dirnames, filenames in list(os.walk(self.out, topdown=False)):
@@ -724,14 +883,98 @@ def build(out, use_gh=True):
         c = f' class="{cls}"' if cls else ""
         return f'<img{c} src="{rel("/assets/portraits/" + slug + ".svg")}" alt="">'
 
-    # Reports as posts (newest first, RSS for free), each with a generated progress strip
+    # Shared by several pages: day labels, record rows, hiring rounds, report cards
+    def day_of_date(date_s):
+        if not day1:
+            return None
+        try:
+            n = (dt.date.fromisoformat(str(date_s)[:10]) - day1).days + 1
+        except ValueError:
+            return None
+        return n if n >= 1 else None
+
+    def day_label(date_s):
+        n = day_of_date(date_s)
+        return f"Day {n}" if n else nice_date(date_s)
+
+    def rec_item(s, show_day=False):
+        mood = f" {mood_chip(s['mood'], s.get('feeling'))}" if s.get("kind") == "diary" and s.get("mood") else ""
+        when_txt = (day_label(s["when"][:10]) + " · " if show_day else "") + esc(s["when"][11:16])
+        return (f'<li><a class="rec" href="{rel("/story/" + s["path"] + ".html")}">{record_badge(s.get("kind"))}'
+                f'<b>{safe(s["title"])}</b><span class="avatars">{avatars(s["workers"], by_slug)}</span>{mood}<time>{when_txt}</time></a></li>')
+
+    rounds = {}
+    for s in story:
+        parts = s["path"].split("/")
+        if len(parts) >= 3 and parts[0] == "hiring":
+            rounds.setdefault(parts[1], []).append(s)
+    for w in workers:
+        if w.get("round"):
+            rounds.setdefault(str(w["round"]), [])
+
+    def round_info(rid):
+        recs = sorted(rounds.get(rid, []), key=lambda m: m["when"])
+        cands = [w for w in workers if str(w.get("round", "")) == rid]
+        hired = [w for w in cands if w["status"] != "candidate"]
+        role = hired[0].get("role", "") if hired else ""
+        for w in cands:
+            if role:
+                break
+            role = re.sub(r"^candidate,?\s*(for\s+)?", "", str(w.get("role", "")), flags=re.I)
+        role = role or re.sub(r"^\d{4}-\d{2}-\d{2}-", "", rid).replace("-", " ").capitalize()
+        brief = next((s for s in recs if s["path"].endswith("/brief")), None)
+        decision = next((s for s in recs if s["path"].endswith("/decision")), None)
+        date = (brief or (recs[0] if recs else {})).get("date") or rid[:10]
+        return {"id": rid, "role": role, "records": recs, "candidates": cands, "hired": hired, "brief": brief,
+                "decision": decision, "interviews": [s for s in recs if s.get("kind") == "interview"], "date": date}
+
+    round_list = sorted((round_info(rid) for rid in rounds), key=lambda x: (x["date"], x["id"]), reverse=True)
+    round_by_id = {x["id"]: x for x in round_list}
+
+    def names_list(ws):
+        ns = [esc(w["name"]) for w in ws]
+        if len(ns) < 2:
+            return "".join(ns)
+        return ", ".join(ns[:-1]) + " and " + ns[-1]
+
+    def round_outcome(rd):
+        n = len(rd["candidates"])
+        bench = [w for w in rd["candidates"] if w["status"] == "candidate"]
+        if rd["hired"]:
+            out = f"{names_list(rd['hired'])} hired from a slate of {n}."
+            if bench:
+                out += f" {names_list(bench)} {'stays' if len(bench) == 1 else 'stay'} on the bench."
+            return out
+        return f"A slate of {n}; no hire yet." if n else "No candidates recorded yet."
+
+    def round_card(rd):
+        fs = "".join(f'<img class="avatar{" hired" if w["status"] != "candidate" else ""}" src="{rel("/assets/portraits/" + w["slug"] + ".svg")}" '
+                     f'alt="{esc(w["name"])}" title="{esc(w["name"])}">' for w in rd["candidates"])
+        return (f'<a class="card" href="{rel("/story/hiring/" + rd["id"] + "/")}"><span class="meta">{badge("Hiring round", "blue")}'
+                f'<span>{day_label(rd["date"])} · {nice_date(rd["date"])}</span></span><b>{safe(rd["role"])}</b>'
+                f'<span class="avatars">{fs}</span><p>{round_outcome(rd)}</p></a>')
+
+    def report_card(r, compact=False):
+        lead, headline = split_title(r["title"])
+        meta = report_badge(r.get("kind", "report")) + (f"<span>{safe(lead)}</span>" if lead else "")
+        if compact:
+            n = r.get("day") or day_of_date(r["date"])
+            meta += f"<span>{('Day ' + esc(n) + ' · ') if n else ''}{nice_date(r['date'])}, {esc(r['when'][11:16])}</span>"
+        else:
+            meta += f"<span>{esc(r['when'][11:16])}</span>"
+        ex = "" if compact else excerpt(r["body"])
+        return (f'<a class="card report" href="{rel("/reports/" + r["slug"] + "/")}"><span class="meta">{meta}</span>'
+                f"<b>{safe(headline)}</b>" + (f"<p>{safe(ex)}</p>" if ex else "") + "</a>")
+
+    # Reports as posts (newest first, RSS for free): a header that says which report this is,
+    # the progress strip, the report beside what happened in its period, and links to the neighbours
     usage_days = usage_file.get("days") or {}
     weekly_budget = num(usage_file.get("weekly_budget_usd"), 150)
     hist_by_date = {h.get("date"): h for h in history if h.get("date")}
-    for r in reports:
+    for i, r in enumerate(reports):
         kind = r.get("kind", "report")
         rday = int(num(r.get("day"), 0))
-        fallback = revenue if r is reports[0] else 0.0
+        fallback = revenue if i == 0 else 0.0
         rev = num(r.get("revenue_usd"), num(hist_by_date.get(r["date"], {}).get("revenue_usd"), fallback))
         used = num(usage_days.get(r["date"]))
         tm = mood_on(r["date"])
@@ -745,53 +988,87 @@ def build(out, use_gh=True):
         # This period: events, people, moods, and usage since the previous report
         # A report's window runs from the previous report to this one, each shifted by a grace
         # period: the diaries and events of a report session are written after its nominal time.
-        i = reports.index(r)
         end_t = (when_time(r["when"]) or dt.datetime(1970, 1, 1)) + REPORT_GRACE
         prev = reports[i + 1]["when"] if i + 1 < len(reports) else None
         start_t = ((when_time(prev) + REPORT_GRACE) if prev and when_time(prev)
                    else (dt.datetime.combine(day1, dt.time(0, 0)) if day1 else dt.datetime(1970, 1, 1)))
         in_window = [e for e in events if (lambda t: t and start_t < t <= end_t)(event_time(e))]
-        period = ['<div class="panel period">', f'<h3>What happened since the last report</h3>', rail(in_window, by_slug)]
+        aside = ['<div class="panel period" role="complementary" aria-label="This period">',
+                 "<h3>What happened since the last report</h3>", rail(in_window, by_slug)]
         people = people_strip(in_window, by_slug, variants)
         if people:
-            period += ["<h3>People</h3>", people]
+            aside += ["<h3>People</h3>", people]
         ml = mood_list(story, by_slug, start_t, end_t)
         if ml:
-            period += ["<h3>How they felt</h3>", ml]
+            aside += ["<h3>How they felt</h3>", ml]
+        aside.append("</div>")
+        wide = []
         if kind in ("weekly", "final"):
             span = 30 if kind == "final" else 7
             rdate = dt.date.fromisoformat(r["date"]) if r.get("date") else None
             dlist = [(rdate - dt.timedelta(days=k)).isoformat() for k in range(span - 1, -1, -1)] if rdate else []
             vals = [num(usage_days.get(d)) for d in dlist]
-            period += [f"<h3>Claude usage, the last {span} days</h3>", daily_bars([d for d in dlist], vals, weekly_budget / 7)]
+            wide += [f"<h3>Claude usage, the last {span} days</h3>", daily_bars([d for d in dlist], vals, weekly_budget / 7)]
             day_of = (lambda when_s: (dt.date.fromisoformat(when_s[:10]) - day1).days + 1) if day1 else (lambda when_s: 0)
             sm = small_multiples(active, moods, max(1, rday - span + 1), rday, day_of)
             if sm:
-                period += [f"<h3>Mood over the {'month' if kind == 'final' else 'week'}</h3>", sm]
+                wide += [f"<h3>Mood over the {'month' if kind == 'final' else 'week'}</h3>", sm]
             if kind == "final":
                 milestones = [e for e in events if str(e.get("type", "")).lower() in MILESTONE_TYPES]
-                period += ["<h3>The month, in milestones</h3>", rail(milestones, by_slug, limit=60)]
+                wide += ["<h3>The month, in milestones</h3>", rail(milestones, by_slug, limit=60)]
                 if history:
-                    period += ["<h3>Net proceeds by day</h3>", revenue_chart(history, goal, days_total, day1)]
-        period.append("</div>")
-        head = {"layout": "default", "title": r["title"], "date": f"{r['when']}:00", "kind": kind,
-                "day": r.get("day"), "number": r.get("number")}
-        extra = ""
+                    wide += ["<h3>Net proceeds by day</h3>", revenue_chart(history, goal, days_total, day1)]
+        older = reports[i + 1] if i + 1 < len(reports) else None
+        newer = reports[i - 1] if i > 0 else None
+        step = ""
+        if older:
+            step += f'<a href="{rel("/reports/" + older["slug"] + "/")}" rel="prev">‹ {safe(split_title(older["title"])[0] or "Older")}</a>'
+        if newer:
+            step += f'<a href="{rel("/reports/" + newer["slug"] + "/")}" rel="next">{safe(split_title(newer["title"])[0] or "Newer")} ›</a>'
+        lead, headline = split_title(r["title"])
+        kicker = (report_badge(kind, " report") + (f'<span class="num">{safe(lead)}</span>' if lead else "")
+                  + f"<span>Day {rday} of {days_total} · {nice_date(r['date'])}, {esc(r['when'][11:16])}</span>")
+        callout = ""
         if r.get("issue"):
-            extra = (f"\n> **Investors:** this report's private copy, with its Questions for the Investors, is "
-                     f"[on GitHub]({r['issue']}). Answer there by midnight.\n")
-        site.write(os.path.join("_posts", f"{r['date']}-{r['slug']}.md"),
-                   fm(head) + "\n".join(strip) + "\n" + "\n".join(period) + "\n" + extra + "\n" + raw(r["body"]))
+            callout = (f'<div class="callout"><b>Investors:</b> this report\'s private copy, with its Questions for the Investors, '
+                       f'is <a href="{esc(r["issue"])}">on GitHub</a>. Answer there by midnight.</div>')
+        pager = ""
+        if older or newer:
+            pager = ('<div class="pager" role="navigation" aria-label="Older and newer reports">'
+                     + (f'<a class="prev" href="{rel("/reports/" + older["slug"] + "/")}">← Older<b>{safe(older["title"])}</b></a>' if older else "")
+                     + (f'<a class="next" href="{rel("/reports/" + newer["slug"] + "/")}">Newer →<b>{safe(newer["title"])}</b></a>' if newer else "")
+                     + "</div>")
+        head = {"layout": "default", "title": r["title"], "date": f"{r['when']}:00", "kind": kind,
+                "day": r.get("day"), "number": r.get("number"), "section": "reports"}
+        body = [crumbs("/reports/", "All reports", f'<span class="step">{step}</span>' if step else ""),
+                page_head(kicker, safe(headline)), "\n".join(strip), "",
+                '<div class="report-grid" markdown="1">', '<div class="report-main" markdown="1">', "",
+                raw(r["body"]), callout, "", "</div>", "\n".join(aside), "</div>", ""]
+        if wide:
+            body += ['<div class="panel period wide">' + "\n".join(wide) + "</div>", ""]
+        body.append(pager)
+        site.write(os.path.join("_posts", f"{r['date']}-{r['slug']}.md"), fm(head) + "\n".join(body) + "\n")
 
-    # Reports index
-    site.write(os.path.join("reports", "index.md"), "\n".join([
-        fm({"layout": "default", "title": "Reports"}), "# Reports", "",
-        '<p class="lead">A report is published every evening, and every morning after a night when something happened. Newest first; every report has a permanent link.</p>', "",
-        '<ul class="reports">', "{% for post in site.posts %}",
-        '<li><b><a href="{{ post.url | relative_url }}">{{ post.title }}</a></b> <span class="tag">{{ post.kind }}</span> · Day {{ post.day }} · {{ post.date | date: "%b %-d, %Y %H:%M" }}</li>',
-        "{% endfor %}", "</ul>", ""]))
+    # Reports index: one block per day, newest first, each report a card with its opening line
+    by_date = {}
+    for r in reports:
+        by_date.setdefault(r["date"], []).append(r)
+    groups = []
+    for date in sorted(by_date, reverse=True):
+        rs = by_date[date]
+        n = rs[0].get("day") or day_of_date(date)
+        tm = mood_on(date)
+        morale = f'<span class="day-mood">team morale {mood_chip(tm)}</span>' if tm else ""
+        groups.append(f'<div class="day"><h2 class="day-head"><span>{("Day " + esc(n)) if n else nice_date(date)}</span>'
+                      f'<small>{nice_date(date)} · {len(rs)} report{"s" if len(rs) != 1 else ""}</small>{morale}</h2>'
+                      f'<div class="cards">{"".join(report_card(r) for r in rs)}</div></div>')
+    rep = [fm({"layout": "default", "title": "Reports", "section": "reports"}), "# Reports", "",
+           '<p class="lead">A report is published every evening, and every morning after a night when something happened. '
+           "Newest first; every report has a permanent link.</p>", ""]
+    rep += ([f'<div class="days">{"".join(groups)}</div>'] if groups else ["No reports yet. The first one is published at 6 p.m. on Day 1."]) + [""]
+    site.write(os.path.join("reports", "index.md"), "\n".join(rep))
 
-    # Home: the five things that matter, then the cast, then the reports
+    # Home: the five things that matter, the latest report, the cast, then the earlier reports
     latest = reports[0] if reports else None
     open_count = len(requests) if requests is not None else None
     team_tile = mood_chip(team_mood, big=True) if team_mood else '<span class="mood-word lv0 big">No diaries yet</span>'
@@ -815,22 +1092,20 @@ def build(out, use_gh=True):
     cast_strip = "".join(
         f'<a href="{rel("/cast/" + w["slug"] + ".html")}">{portrait_img(w["slug"])}<b>{esc(w["name"])}</b><small>{esc(w.get("role", ""))}</small>{mood_chip(latest_mood(w["slug"])[1], latest_mood(w["slug"])[3]) if latest_mood(w["slug"])[1] else ""}</a>'
         for w in active)
-    index = [fm({"layout": "default", "title": "Home", "description": cfg["tagline"]}),
+    index = [fm({"layout": "default", "title": "Home", "description": cfg["tagline"], "section": "home"}),
              f"# {cfg['name']}", "", f'<p class="lead">{esc(cfg["tagline"])}</p>', "",
              '<div class="tiles">' + "".join(tiles) + "</div>", hero, ""]
     if latest:
-        index += ["## Latest", "",
-                  f'<p><b><a href="{rel("/reports/" + latest["slug"] + "/")}">{esc(latest["title"])}</a></b> <span class="tag">{esc(latest.get("kind", ""))}</span> · {latest["when"]}</p>', ""]
+        index += ["## Latest report", "", f'<div class="cards one">{report_card(latest)}</div>', ""]
     if active:
         index += ["## The cast", "", '<div class="cast">' + cast_strip + "</div>", ""]
-    index += ["## Reports", "", '<ul class="reports">', "{% for post in site.posts limit:8 %}",
-              '<li><b><a href="{{ post.url | relative_url }}">{{ post.title }}</a></b> <span class="tag">{{ post.kind }}</span> · Day {{ post.day }} · {{ post.date | date: "%b %-d, %H:%M" }}</li>',
-              "{% endfor %}", "</ul>",
-              f'<p><a href="{rel("/reports/")}">All reports</a>' + (f' · <a href="{rel("/requests.html")}">open requests</a> · <a href="{msg_url}">message the company</a>' if msg_url else "") + "</p>", ""]
+    if len(reports) > 1:
+        index += ["## Earlier reports", "", '<div class="cards">' + "".join(report_card(r, compact=True) for r in reports[1:4]) + "</div>", ""]
+    index += [f'<p><a href="{rel("/reports/")}">All reports</a>' + (f' · <a href="{rel("/requests.html")}">open requests</a> · <a href="{msg_url}">message the company</a>' if msg_url else "") + "</p>", ""]
     site.write("index.md", "\n".join(index))
 
     # Cast
-    cast = [fm({"layout": "default", "title": "Cast"}), "# The cast", "",
+    cast = [fm({"layout": "default", "title": "Cast", "section": "cast"}), "# The cast", "",
             '<p class="lead">Every worker is an AI-simulated character with a first name, a role, a personality, and a career goal. '
             "Portraits are drawn by code from a mathematical expression seeded by the name, and move in a way chosen by the worker's temperament; "
             "the word under each name is the feeling from their latest diary, in their own word.</p>", ""]
@@ -838,7 +1113,11 @@ def build(out, use_gh=True):
         group = [w for w in workers if w["status"] == status or (status == "former" and w["status"] not in ("active", "candidate"))]
         if not group:
             continue
-        cast += [f"## {label}", "", '<div class="cast">']
+        cast += [f"## {label}", ""]
+        if status == "candidate":
+            cast += [f'<p class="mood-why">Interviewed in a hiring round and not hired. They stay on the bench and may be reconsidered. '
+                     f'<a href="{rel("/story/#hiring-rounds")}">See the hiring rounds</a>.</p>', ""]
+        cast += ['<div class="cast">']
         for w in group:
             cast.append(f'<a href="{rel("/cast/" + w["slug"] + ".html")}">{portrait_img(w["slug"])}<b>{esc(w["name"])}</b><small>{esc(w.get("role", ""))}</small>'
                         f'{mood_chip(latest_mood(w["slug"])[1], latest_mood(w["slug"])[3]) if latest_mood(w["slug"])[1] else ""}</a>')
@@ -851,18 +1130,25 @@ def build(out, use_gh=True):
         records = [s for s in story if slug in s["workers"]]
         hist = moods.get(slug, [])
         mwhen, mlevel, mreason, mword = latest_mood(slug)
-        page = [fm({"layout": "default", "title": w["name"]}), portrait_img(slug, "portrait"), f"# {esc(w['name'])}", "",
-                f"**{esc(w.get('role', ''))}**" + (f" · reports to {esc(w['manager'])}" if w.get("manager") else "")
-                + (f" · {esc(w['status'])}" if w.get("status") != "active" else ""), ""]
+        status_label, status_tone = STATUS_BADGES.get(w.get("status", "active"), (str(w.get("status", "")).title(), "grey"))
+        kicker = (badge(status_label, status_tone) + f"<span>{safe(w.get('role', ''))}</span>"
+                  + (f"<span>reports to {esc(w['manager'])}</span>" if w.get("manager") else ""))
+        page = [fm({"layout": "default", "title": w["name"], "section": "cast"}), crumbs("/cast/", "The cast"),
+                f'<div class="person-head">{page_head(kicker, esc(w["name"]))}{portrait_img(slug, "portrait")}</div>', ""]
         if w.get("bio"):
             page += [scrub(str(w["bio"])), ""]
         page += [f'<div class="mood"><div>{mood_chip(mlevel, mword, mreason, big=True)}'
                  + (f'<div class="why">{mwhen}, from their diary</div>' if mwhen else "") + "</div>"
                  + (sparkline([m[1] for m in hist[-30:]]) if len(hist) > 1 else "") + "</div>", ""]
         rows = [("Portrait", f"{portrait_params(w['name'], variants.get(w['name'], 0))['family']} curve, seeded by the name"),
-                ("Temperament", f"{w['temperament']}: {TEMPERAMENTS[w['temperament']][2]}"), ("Joined", w.get("joined")), ("Left", w.get("left")),
-                ("Hiring round", w.get("round")), ("Salary (credits, fictional)", w.get("salary")), ("Career goal", w.get("career_goal"))]
-        page += ["| | |", "| --- | --- |"] + [f"| {k} | {cell(scrub(str(v)))} |" for k, v in rows if v] + [""]
+                ("Temperament", f"{w['temperament']}: {TEMPERAMENTS[w['temperament']][2]}"), ("Joined", w.get("joined")), ("Left", w.get("left"))]
+        page += ["| | |", "| --- | --- |"] + [f"| {k} | {cell(scrub(str(v)))} |" for k, v in rows if v]
+        rd = round_by_id.get(str(w["round"])) if w.get("round") else None
+        if rd:
+            page.append(f"| Hiring round | [{cell(rd['role'])}, {day_label(rd['date'])}]({rel('/story/hiring/' + rd['id'] + '/')}) |")
+        elif w.get("round"):
+            page.append(f"| Hiring round | {cell(scrub(str(w['round'])))} |")
+        page += [f"| {k} | {cell(scrub(str(v)))} |" for k, v in (("Salary (credits, fictional)", w.get("salary")), ("Career goal", w.get("career_goal"))) if v] + [""]
         if hist:
             page += ["## Mood, from the diaries", "", "| When | Feeling | Why |", "| --- | --- | --- |"]
             page += [f"| {m[0]} | {mood_chip(m[1], m[3])} | {cell(m[2])} |" for m in reversed(hist[-10:])] + [""]
@@ -871,39 +1157,116 @@ def build(out, use_gh=True):
             page += ["| When | What | |", "| --- | --- | --- |"]
             for e in mine:
                 link = f"[link]({e['link']})" if e.get("link") and e["link"] != "(private)" else ""
-                page.append(f"| {fmt_time(e['time'])} | <span class=\"tag\">{esc(e.get('type', ''))}</span> {cell(e['summary'])} | {link} |")
+                page.append(f"| {fmt_time(e['time'])} | <span class=\"tag t-{esc(e.get('type', ''))}\">{esc(e.get('type', ''))}</span> {cell(e['summary'])} | {link} |")
         else:
             page.append("Nothing logged yet.")
         page += ["", "## Diaries, meetings, and conversations", ""]
-        page += [f"- [{esc(s['title'])}]({rel('/story/' + s['path'] + '.html')}) · {s['when']} · {esc(s.get('kind', ''))}" for s in records] or ["None yet."]
+        page += (['<ul class="recs">' + "".join(rec_item(s, show_day=True) for s in records) + "</ul>"] if records else ["None yet."])
         memory = load_memory(slug, scrub) if cfg.get("publish_memory") else ""
         if memory:
-            page += ["", "## What they remember", "", "<details><summary>The worker's own notes, as they stand today</summary>", "", raw(memory), "", "</details>"]
+            page += ["", "## What they remember", "", '<details markdown="1"><summary>The worker\'s own notes, as they stand today</summary>', "", raw(memory), "", "</details>"]
         site.write(os.path.join("cast", f"{slug}.md"), "\n".join(page) + "\n")
 
-    # Story records
+    # Story records: each says what kind of record it is, when, and who is in it, with a way back
     for s in story:
-        who = ", ".join(f"[{esc(by_slug[x]['name'])}]({rel('/cast/' + x + '.html')})" if x in by_slug else x for x in s["workers"])
-        head = fm({"layout": "default", "title": s["title"]})
-        mood_line = ""
+        parts = s["path"].split("/")
+        rd = round_by_id.get(parts[1]) if len(parts) >= 3 and parts[0] == "hiring" else None
+        back = crumbs("/story/hiring/" + rd["id"] + "/", "Hiring round: " + rd["role"]) if rd else crumbs("/story/", "Records")
+        kicker = (record_badge(s.get("kind"))
+                  + f"<span>{day_label(s['when'][:10])} · {nice_date(s['when'][:10])}, {esc(s['when'][11:16])}</span>")
+        sub = person_chips(s["workers"], by_slug)
         if s.get("mood"):
-            mood_line = "\n\n" + mood_chip(s["mood"], s.get("feeling"), s["mood_reason"])
+            sub += f'<p class="mood">{mood_chip(s["mood"], s.get("feeling"), s["mood_reason"], big=True)}</p>'
         site.write(os.path.join("story", s["path"] + ".md"),
-                   head + f"# {esc(s['title'])}\n\n*{s['when']}* · {esc(s.get('kind', 'record'))}" + (f" · {who}" if who else "") + mood_line
+                   fm({"layout": "default", "title": s["title"], "section": "records"}) + back + page_head(kicker, safe(s["title"]), sub)
                    + "\n\n" + raw(s["body"]))
 
-    # Combined log
+    # Records: the hiring rounds, then diaries, meetings, and conversations by day
+    others = [s for s in story if not s["path"].startswith("hiring/")]
+    rec_days = {}
+    for s in others:
+        rec_days.setdefault(s["when"][:10], []).append(s)
+    rgroups = []
+    for date in sorted(rec_days, reverse=True):
+        items = sorted(rec_days[date], key=lambda m: m["when"], reverse=True)
+        rgroups.append(f'<div class="day"><h2 class="day-head"><span>{day_label(date)}</span><small>{nice_date(date)} · '
+                       f'{len(items)} record{"s" if len(items) != 1 else ""}</small></h2>'
+                       f'<ul class="recs">{"".join(rec_item(s) for s in items)}</ul></div>')
+    recs_page = [fm({"layout": "default", "title": "Records", "section": "records"}), "# Records", "",
+                 '<p class="lead">Diaries, meetings, conversations, and hiring rounds, as the workers wrote them. '
+                 "The reports quote from these records.</p>", ""]
+    if round_list:
+        recs_page += ['<h2 id="hiring-rounds">Hiring rounds</h2>', "",
+                      f'<div class="cards">{"".join(round_card(rd) for rd in round_list)}</div>', ""]
+    recs_page += ['<h2 id="by-day">Diaries, meetings, and conversations</h2>', "",
+                  (f'<div class="days">{"".join(rgroups)}</div>' if rgroups else "Nothing written yet."), ""]
+    site.write(os.path.join("story", "index.md"), "\n".join(recs_page))
+
+    # One page per hiring round: the steps, the candidates with their scorecards, the records
+    for rd in round_list:
+        n = len(rd["candidates"])
+        hired_w = rd["hired"][0] if rd["hired"] else None
+        steps = [("Brief", rd["brief"] is not None, rel("/story/" + rd["brief"]["path"] + ".html") if rd["brief"] else ""),
+                 (f"Slate of {n}" if n else "Slate", n > 0, ""),
+                 (f"{len(rd['interviews'])} interviews" if rd["interviews"] else "Interviews", bool(rd["interviews"]), ""),
+                 ("Decision", rd["decision"] is not None, rel("/story/" + rd["decision"]["path"] + ".html") if rd["decision"] else ""),
+                 (f"Hired {esc(hired_w['name'])}" if hired_w else "Onboarding", hired_w is not None,
+                  rel("/cast/" + hired_w["slug"] + ".html") if hired_w else "")]
+        first_open = next((k for k, st in enumerate(steps) if not st[1]), len(steps))
+        lis = []
+        for k, (label, done, href) in enumerate(steps):
+            cls = "done" if k < first_open else "now" if k == first_open else "todo"
+            text = f'<a href="{href}">{label}</a>' if href else label
+            lis.append(f'<li class="{cls}"><span class="dot"></span><span class="lbl">{text}</span></li>')
+        cards = []
+        for w in sorted(rd["candidates"], key=lambda x: (x["status"] == "candidate", x["name"])):
+            scores = []
+            for s in rd["interviews"]:
+                if w["slug"] not in s["workers"]:
+                    continue
+                mean = scorecard_mean(s["body"])
+                if mean is None:
+                    continue
+                mm = re.match(r"interview-([a-z0-9]+)-", s["path"].split("/")[-1])
+                by = mm.group(1) if mm else (s["workers"][0] if s["workers"] else "")
+                scores.append(f"{mean:.1f} ({esc(by_slug[by]['name'] if by in by_slug else by)})")
+            status = badge("Hired", "green") if w["status"] != "candidate" else badge("On the bench", "grey")
+            cards.append(f'<a href="{rel("/cast/" + w["slug"] + ".html")}">{portrait_img(w["slug"])}<b>{esc(w["name"])}</b>{status}'
+                         + (f'<small class="score">Scorecard average {", ".join(scores)}</small>' if scores else "") + "</a>")
+        page = [fm({"layout": "default", "title": "Hiring round: " + rd["role"], "section": "records"}),
+                crumbs("/story/#hiring-rounds", "Records"),
+                page_head(badge("Hiring round", "blue") + f"<span>{day_label(rd['date'])} · {nice_date(rd['date'])}</span>",
+                          safe(rd["role"]), f'<p class="lead">{round_outcome(rd)}</p>'),
+                '<ol class="pipe">' + "".join(lis) + "</ol>", "", "## Candidates", "",
+                ('<div class="cast">' + "".join(cards) + "</div>" if cards else "No candidates recorded yet."), "",
+                "## Records in this round", "",
+                ('<ul class="recs">' + "".join(rec_item(s, show_day=True) for s in rd["records"]) + "</ul>" if rd["records"] else "None yet."), ""]
+        site.write(os.path.join("story", "hiring", rd["id"], "index.md"), "\n".join(page))
+
+    # Combined log, one table per day
     rows = events[: int(num(cfg.get("log_rows"), 500))]
-    log = [fm({"layout": "default", "title": "Log"}), "# The log", "",
+    log = [fm({"layout": "default", "title": "Log", "section": "log"}), "# The log", "",
            f'<p class="lead">Every notable event, newest first ({len(rows)} shown of {len(events)}; '
            f'<a href="{rel("/log/events.json")}">all of them as JSON</a>). This is the operational record the reports are written from.</p>', ""]
     if rows:
-        log += ["| When | Who | What | |", "| --- | --- | --- | --- |"]
+        def day_key(e):
+            t = event_time(e)
+            return t.date().isoformat() if t else str(e.get("time", ""))[:10]
+        counts = {}
         for e in rows:
+            counts[day_key(e)] = counts.get(day_key(e), 0) + 1
+        cur = None
+        for e in rows:
+            k = day_key(e)
+            if k != cur:
+                cur = k
+                log += ["", f'## {day_label(k)} <small>{nice_date(k)} · {counts[k]} event{"s" if counts[k] != 1 else ""}</small>', "",
+                        "| Time | Who | What | |", "| --- | --- | --- | --- |"]
+            t = event_time(e)
             wslug = str(e.get("worker", "")).lower()
-            who = f"[{esc(by_slug[wslug]['name'])}]({rel('/cast/' + wslug + '.html')})" if wslug in by_slug else esc(e.get("worker", ""))
+            who = (avatars([wslug], by_slug) + f" [{esc(by_slug[wslug]['name'])}]({rel('/cast/' + wslug + '.html')})") if wslug in by_slug else esc(e.get("worker", ""))
             link = f"[link]({e['link']})" if e.get("link") and e["link"] != "(private)" else ""
-            log.append(f"| {fmt_time(e['time'])} | {who} | <span class=\"tag\">{esc(e.get('type', ''))}</span> {cell(e['summary'])} | {link} |")
+            log.append(f"| {t.strftime('%H:%M') if t else ''} | {who} | <span class=\"tag t-{esc(e.get('type', ''))}\">{esc(e.get('type', ''))}</span> {cell(e['summary'])} | {link} |")
     else:
         log.append("Nothing logged yet.")
     site.write(os.path.join("log", "index.md"), "\n".join(log) + "\n")
@@ -914,7 +1277,7 @@ def build(out, use_gh=True):
     five_used, five_budget = num(usage.get("window_5h_usd")), usage.get("five_hour_budget_usd")
     caps = {k: num(v) for k, v in (usage.get("caps") or {}).items()}
     shares = usage.get("shares_7d") or {}
-    up = [fm({"layout": "default", "title": "Usage"}), "# Claude usage", "",
+    up = [fm({"layout": "default", "title": "Usage", "section": "usage"}), "# Claude usage", "",
           '<p class="lead">One Claude Max subscription runs the company. The plan meters a rolling 5-hour window, a weekly window, '
           "and a weekly Fable window; the company aims to use the whole weekly allowance by each reset, never early (Tenet 7). "
           "Figures are Claude Code's own cost estimate at API rates.</p>", ""]
@@ -946,7 +1309,7 @@ def build(out, use_gh=True):
     site.write("usage.md", "\n".join(up))
 
     # Requests
-    rq = [fm({"layout": "default", "title": "Requests"}), "# Requests for the Investors", ""]
+    rq = [fm({"layout": "default", "title": "Requests", "section": "requests"}), "# Requests for the Investors", ""]
     if requests is None:
         rq += ["Open requests are listed here when the site is built on the company's Mac mini.", ""]
     else:
@@ -962,8 +1325,9 @@ def build(out, use_gh=True):
                "acknowledges it, and acts on it (Commandment 57).", ""]
     site.write("requests.md", "\n".join(rq) + "\n")
 
-    # Pages the company writes: about, privacy, support, press
+    # Pages the company writes: about, privacy, support, press, under the About tab with their own tabs
     pages = {"about": "About", "privacy": "Privacy policy", "support": "Support", "press": "Press kit"}
+    short = {"about": "About", "privacy": "Privacy", "support": "Support", "press": "Press kit"}
     for key, title in pages.items():
         src = os.path.join(ROOT, "site", "pages", f"{key}.md")
         if os.path.exists(src):
@@ -974,7 +1338,9 @@ def build(out, use_gh=True):
                               "privacy": "# Privacy policy\n\nTo be written before launch.\n",
                               "support": "# Support\n\nSupport details are posted here before launch.\n",
                               "press": "# Press kit\n\nThe press kit is published here at launch.\n"}[key]
-        site.write(f"{key}.md", fm({"layout": "default", "title": meta.get("title", title)}) + raw(body))
+        sub = "".join(f'<a href="{rel("/" + k + ".html")}"{" aria-current=" + chr(34) + "page" + chr(34) if k == key else ""}>{v}</a>' for k, v in short.items())
+        site.write(f"{key}.md", fm({"layout": "default", "title": meta.get("title", title), "section": "about"})
+                   + f'<div class="subtabs" role="navigation" aria-label="About the experiment">{sub}</div>\n\n' + raw(body))
 
     site.clean()
     return {"reports": len(reports), "workers": len(workers), "events": len(events), "story": len(story),

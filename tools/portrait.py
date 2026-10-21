@@ -218,8 +218,10 @@ def default_temperament(name):
 def portrait_svg(name, temperament=None, mood=None, animated=True, variant=0):
     p = params(name, variant)
     temperament = temperament if temperament in TEMPERAMENTS else default_temperament(name)
-    bg = f"hsl({p['hue']},40%,{94 if p['light'] else 15}%)"
-    fill = f"hsl({p['hue']},{p['sat']}%,{44 if p['light'] else 64}%)"
+    # Every portrait sits on a white tile, so a cast reads as one set wherever it appears. The "light" draw
+    # in params() is kept only so the random sequence, and with it every existing shape, stays the same.
+    bg = "#ffffff"
+    fill = f"hsl({p['hue']},{p['sat']}%,44%)"
     shape = f'<polygon points="{outline(p)}" fill="{fill}" transform="rotate({p["rot"]:.1f})"/>'
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="portrait of {name}">']
     if animated:
