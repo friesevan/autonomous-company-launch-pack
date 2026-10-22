@@ -6,7 +6,7 @@
 #   tests/run.sh
 set -u
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
-T="$(mktemp -d "${TMPDIR:-/tmp}/launch-pack-tests.XXXXXX")" || exit 1
+T="$(mktemp -d "${TMPDIR%/}/launch-pack-tests.XXXXXX" 2>/dev/null || mktemp -d "/tmp/launch-pack-tests.XXXXXX")" || exit 1
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/home/.local/bin" "$T/repo/ops/queue"
 KIT=".claude/settings.json .github .gitignore CLAUDE.md README.md amendments.md investors rules setup tools ops/prompts ops/launchd"
