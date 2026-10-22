@@ -263,7 +263,7 @@ echo "== status and stdin"
 ok "status text" "python3 tools/governor.py status --now 2026-11-03T10:00:00-05:00 | grep -q 'Last 7 days by category'"
 ok "status --json" "python3 tools/governor.py status --json --now 2026-11-03T10:00:00-05:00 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert \"all_time_by_model_usd\" in d and \"shares_7d\" in d and \"plan\" in d and \"api\" in d and \"week_models\" in d'"
 ok "claude gets /dev/null as stdin" "grep -q '< /dev/null' tools/supervisor.sh"
-ok "no key ever reaches a plan session's environment" "grep -q 'unset CLAUDECODE ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN' tools/supervisor.sh && grep -q 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1' tools/supervisor.sh"
+ok "no key ever reaches a plan session's environment, and the env scrub (which turns auto mode off) is never set" "grep -q 'unset CLAUDECODE ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN' tools/supervisor.sh && ! grep -q '^export.*CLAUDE_CODE_SUBPROCESS_ENV_SCRUB' tools/supervisor.sh tools/smoke_test.sh"
 
 echo; echo "PASS $PASS  FAIL $FAIL"
 [ "$FAIL" -eq 0 ]

@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.." || exit 1
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 MIN_VERSION="2.1.293"
 unset CLAUDECODE ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
-export DISABLE_AUTOUPDATER=1 CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 CLAUDE_CODE_STARTUP_FAILURE_RESULTS=1
+export DISABLE_AUTOUPDATER=1 CLAUDE_CODE_STARTUP_FAILURE_RESULTS=1   # the same environment as the supervisor
 mkdir -p ops/runs
 OUT="ops/runs/smoke-$(date +%Y%m%d-%H%M%S).jsonl"
 VERSION="$("$CLAUDE_BIN" --version 2>/dev/null | head -1)"
