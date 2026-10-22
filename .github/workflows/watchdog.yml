@@ -1,0 +1,45 @@
+# The watchdog. GitHub runs it every 30 minutes on its own servers, so it works when the Mac
+# mini can't: off, asleep, offline, stuck at the FileVault screen, or with an expired token.
+# It reads the heartbeat the Mac sets every 15 minutes (the repository variable HEARTBEAT_AT).
+# After 45 quiet minutes it opens an Emergency issue that @mentions both Investors, and it
+# closes that issue when the heartbeat returns (rules/watchdog.sh).
+#
+# Test it: Actions tab > Watchdog > Run workflow, with "test" checked.
+# Stop it, when the experiment ends or for a long pause: Actions tab > Watchdog > Disable workflow.
+# Cost: about 1,500 of the 2,000 free GitHub Actions minutes a month for private repositories.
+# Investors own this file.
+name: Watchdog
+on:
+  schedule:
+    - cron: "8,38 * * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Send a test notification (opens and closes a test issue)"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: watchdog
+  cancel-in-progress: false
+jobs:
+  check:
+    # The Launch Pack is only the template: it has no company to watch.
+    if: github.repository != 'friesevan/autonomous-company-launch-pack'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the company's heartbeat
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEARTBEAT_AT: ${{ vars.HEARTBEAT_AT }}
+          TEST: ${{ inputs.test || 'false' }}
+        run: |
+          for f in rules/watchdog.sh investors/allowlist.md ops/state.json; do
+            mkdir -p "$(dirname "$f")"
+            gh api -H "Accept: application/vnd.github.raw+json" "repos/$GH_REPO/contents/$f" > "$f" 2>/dev/null || rm -f "$f"
+          done
+          ALLOWLIST=investors/allowlist.md STATE_JSON=ops/state.json bash rules/watchdog.sh

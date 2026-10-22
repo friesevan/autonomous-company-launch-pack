@@ -1,0 +1,6 @@
+{
+  "apiKeyHelper": "/usr/bin/security find-generic-password -s company-api-credits -a company -w",
+  "env": {
+    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "1"
+  }
+}

@@ -8,7 +8,7 @@ Start here. This repository holds everything needed to start the experiment: an 
 
 | To | Do this |
 | --- | --- |
-| Create the company's repository | On GitHub, open this repository, then **Use this template > Create a new repository**: owner = the company's organization, name = `company`, **Private**. Or, from a terminal: `gh repo create <org>/company --private --template friesevan/autonomous-company-launch-pack` |
+| Create the company's repository | First merge any working branch into `main`, because **Use this template** copies only the default branch. Then, on GitHub, open this repository, then **Use this template > Create a new repository**: owner = the company's organization, name = `company`, **Private**. Or, from a terminal: `gh repo create <org>/company --private --template friesevan/autonomous-company-launch-pack` |
 | Get it onto the Mac mini | In the company's macOS account: `gh repo clone <org>/company` |
 | Read or edit the kit itself | `gh repo clone friesevan/autonomous-company-launch-pack` |
 | Check the run loop | `tests/run.sh` (about a minute, uses no Claude usage; see `tests/README.md`) |
@@ -23,21 +23,21 @@ The repository is private. Its owner adds the other Investor under **Settings > 
 | --- | --- | --- |
 | Before Day 1 | The Setup Guide: hardware, macOS, software, Apple, GitHub. The gate must be fully passed. | Investors |
 | Day 1 | The company sets itself up: the CEO, the Handbook, the run loop, the channels, the site. First report at 6 p.m. | The company |
-| Day 2 (target) | The Pitch: the top product candidates, presented to the Investors | The company; Investors choose |
-| Days 3 to about 16 | Build, TestFlight builds to the Investors, press kit and launch plan drafted | The company; Investors test |
-| About Day 17 | App Store submission; App Review usually takes 1 to 3 days | The company |
+| When the research is conclusive (Day 2 at the earliest) | The Pitch: the top product candidates and their proposed names, presented to the Investors | The company; Investors choose |
+| From the Pitch to about Day 17 to 20 | Build, TestFlight builds to the Investors, press kit and launch plan drafted | The company; Investors test |
+| About Day 17 to 20 | App Store submission of a complete first version; App Review usually takes 1 to 3 days | The company |
 | Launch to Day 30 | Sell and keep improving; the Investors announce the launch | Both |
 | Days 7, 14, 21, 28 | Weekly report inside the evening report | The company |
 | Day 30 | The Final Report, with every worker's testimony, and one of three endings: Continue, Request for More Funding, or File for Bankruptcy | The company proposes; Investors decide |
 
-Reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. Each report carries the company's usage figures and ends with its Questions for the Investors, answered on the report's private copy, a GitHub issue linked from it; the public site never shows the questions. Between reports the site's cast pages, log, usage, and open requests update after every run. The Investors can message the company at any time through a GitHub issue.
+The CEO's reports publish on a public site at 6 p.m. Eastern every day, and at 6 a.m. unless the night was quiet. Each report is her business update, with the company's usage as percentages of the plan's limits, and ends with its Questions for the Investors, answered on the report's private copy, a GitHub issue linked from it; the public site never shows the questions. The company's story, the workers' diaries, conversations, and hiring rounds, is in the site's Records section. Between reports the records, cast pages, log, usage, and open requests update after every run. The site goes online when the Investors switch it on in `investors/site/settings.json`. The Investors can message the company at any time through a GitHub issue.
 
 ## The gate (before Day 1)
 
 Day 1 does not start until all five are true. Setup time on Day 1 counts toward the 30 days, so nothing should still be waiting on Apple.
 
 1. The Apple Developer Program membership is active (individual enrollment; one day to several weeks).
-2. The Paid Apps Agreement is accepted, and tax and banking are complete, in App Store Connect.
+2. The Paid Apps Agreement is accepted, tax and banking are complete, and EU trader status is declared, in App Store Connect.
 3. The Small Business Program enrollment is submitted.
 4. The Mac mini is set up with Xcode, Homebrew, Claude Code, and the Claude desktop app.
 5. GitHub is set up and both Investors' usernames are in `investors/allowlist.md`.
@@ -62,20 +62,31 @@ Day 1 does not start until all five are true. Setup time on Day 1 counts toward 
 | `rules/lookup.py` | Prints one Commandment, section, or search result, with any amendment that changes it | Investors |
 | `rules/build_agents.py` | Combines each worker's persona with the worker rules and amendments before every run | Investors |
 | `rules/hooks/protect-records.sh` | Blocks deleting or moving logs, story, reports, and the Investors' files | Investors |
-| `rules/hooks/model-guard.py` | Refuses Fable once its weekly allowance is used, and keeps diaries and small talk on Haiku | Investors |
+| `rules/hooks/model-guard.py` | Refuses Fable once its weekly allowance is used or the session runs on the API credits, refuses untagged worker calls in work and inbox sessions, and keeps diaries and small talk on Haiku | Investors |
+| `rules/hooks/security-guard.py` | Refuses commands that would weaken the Mac mini's security or touch the Investors' files, and logs every `sudo` command | Investors |
+| `rules/hooks/config-guard.py` | Blocks settings changes during the company's own sessions | Investors |
+| `rules/hooks/session-canary.sh` | Marks every session, so the supervisor knows the hooks loaded | Investors |
+| `rules/posture.sh` | Checks the firewall, FileVault, SIP, Gatekeeper, and automatic security updates every tick | Investors |
+| `rules/file-guard.sh` | Puts back any change a session makes to the Investors' files | Investors |
+| `rules/api-settings.json` | The settings for sessions on the included API credits | Investors |
+| `rules/watchdog.sh`, `.github/workflows/watchdog.yml` | The watchdog: GitHub checks the Mac's heartbeat every 30 minutes and opens an emergency if it stops | Investors |
 | `setup/APPLE.md` | Setting Up Apple Developer Account: who owns it, which Apple Account goes where, the steps | Investors |
 | `setup/INVESTORS.md` | The Setup Guide | Investors |
 | `setup/SITE.md` | The site: pages, data contract, how it updates, answering on GitHub | Investors |
 | `setup/OPERATIONS.md` | The Operations Guide | Investors |
 | `investors/allowlist.md` | GitHub usernames whose messages count as instructions | Investors |
-| `.claude/settings.json` | Permission allow and deny rules, the two hooks, subagent limits | Investors |
+| `investors/site/` | The Investors' site controls: the publish switch, an announcement, styles, pages, and files | Investors |
+| `investors/billing.json` | The Investors' switch for API-credit overflow, and its limits | Investors |
+| `.claude/settings.json` | Permission allow and deny rules, the hooks, subagent limits, auto-updates off | Investors |
 | `ops/prompts/day1.md` | The first prompt | Investors |
 | `ops/prompts/work.md`, `morning.md`, `evening.md` | The fixed prompts for each session type | The company may improve |
-| `tools/supervisor.sh`, `governor.py`, `inbox_check.sh`, `quiet_night.py`, `run_queue.sh`, `events.py`, `xc.sh`, `install-launchd.sh` | The run loop and usage governor, tested and ready to install on Day 1 | The company may improve |
+| `tools/supervisor.sh`, `governor.py`, `inbox.py`, `heartbeat.sh`, `quiet_night.py`, `run_queue.sh`, `events.py`, `xc.sh`, `install-launchd.sh` | The run loop and usage governor, tested and ready to install on Day 1 | The company may improve |
 | `tools/site_build.py`, `tools/site_publish.sh`, `tools/portrait.py` | The public site generator and publisher, and the animated portrait generator, tested | The company may improve |
 | `tools/hiring_check.py` | Checks that every hire went through a complete hiring round, in order (Commandment 18) | The company may improve |
+| `tools/report_facts.py` | Gathers everything a report needs into one file before each report session, without Claude | The company may improve |
+| `tools/smoke_test.sh` | One tiny real run with the supervisor's exact flags: the Investors run it before Day 1, and the supervisor runs it before a new Claude Code version's first session | The company may improve |
 | `ops/launchd/` | The LaunchAgent template (every 15 minutes) | The company may improve |
-| `tests/run.sh`, `tests/*_test.sh`, stand-ins | 121 checks of the run loop, governor, model guard, site generator, and hiring-round check, run with a stand-in `claude` and `gh` | The company may improve |
+| `tests/run.sh`, `tests/*_test.sh`, stand-ins | Over 450 checks of the run loop, governor, inbox, guards, watchdog, site generator, portraits, report facts, and hiring-round check, run with a stand-in `claude` and `gh`; safe to run on the live Mac mini | The company may improve |
 | `.gitignore`, `ops/queue/README.md` | Housekeeping | The company may improve |
 
 The `company` repository, created from this template, starts with all of these. The company creates everything else. Every worker has a first name only.

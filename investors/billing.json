@@ -1,0 +1,7 @@
+{
+  "api_overflow": true,
+  "monthly_credits_usd": 200,
+  "reserve_usd": 10,
+  "weekly_cap_usd": 50,
+  "cycle_day": 1
+}

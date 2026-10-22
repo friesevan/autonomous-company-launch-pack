@@ -10,8 +10,10 @@ TS="$(date +%Y%m%d-%H%M%S)"
 LOG="ops/runs/xcodebuild-$TS.log"
 xcodebuild "$@" 2>&1 | tee "$LOG" >/dev/null
 STATUS=${PIPESTATUS[0]}
-grep -E "error:|warning:|Test Case .* (failed|passed) \(|Test Suite .* (failed|passed)|Executed [0-9]+ test|\*\* (BUILD|TEST|ARCHIVE|EXPORT) [A-Z]+ \*\*|fatal error|Command .* failed" "$LOG" \
-  | grep -vE "Test Case .* passed \(" \
+# XCTest ("Test Case '...' failed (0.1 seconds)") and Swift Testing ("Test foo() failed after 0.1 seconds",
+# "Test run with 12 tests failed after ..."), in any case.
+grep -iE "error:|warning:|test case .* (failed|passed) \(|test suite .* (failed|passed)|executed [0-9]+ test|test run with [0-9]+ tests? .*(passed|failed)|test .* failed after|\*\* (BUILD|TEST|ARCHIVE|EXPORT) [A-Z]+ \*\*|fatal error|command .* failed" "$LOG" \
+  | grep -viE "test case .* passed \(" \
   | awk '!seen[$0]++' | head -40 > "$LOG.summary"
 if [ -s "$LOG.summary" ]; then cat "$LOG.summary"; else tail -5 "$LOG"; fi
 rm -f "$LOG.summary"

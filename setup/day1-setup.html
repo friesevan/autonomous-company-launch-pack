@@ -1,0 +1,634 @@
+<title>Day 1 Mac Mini Setup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one reading column; each section is a numbered stage with its own progress, steps are checkable rows. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --fg: #1d2129; --muted: #5d6573; --line: #dde1e8;
+  --accent: #2459c9; --accent-soft: #e5ecfb; --ok: #1f8a4c; --ok-soft: #e2f3e9; --warn: #a15c00; --warn-soft: #fbefd9;
+  --code-bg: #eef1f5; --var: #7a3eb1;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151b; --panel: #1a1e26; --fg: #e6e9ef; --muted: #9aa3b2; --line: #2d3340;
+  --accent: #7ea6ff; --accent-soft: #1f2b47; --ok: #5cc98a; --ok-soft: #173326; --warn: #f0b45a; --warn-soft: #3a2a12;
+  --code-bg: #232833; --var: #c8a2f0; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151b; --panel: #1a1e26; --fg: #e6e9ef; --muted: #9aa3b2; --line: #2d3340;
+  --accent: #7ea6ff; --accent-soft: #1f2b47; --ok: #5cc98a; --ok-soft: #173326; --warn: #f0b45a; --warn-soft: #3a2a12;
+  --code-bg: #232833; --var: #c8a2f0; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); }
+.wrap { max-width: 780px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+h1, h2 { font-family: var(--display); text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 6vw, 42px); line-height: 1.1; margin: 4px 0 10px; }
+h2 { font-size: 24px; margin: 0; line-height: 1.2; }
+.eyebrow { font: 600 12px/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.lede { color: var(--muted); max-width: 64ch; margin: 0 0 18px; }
+a { color: var(--accent); }
+code, pre, kbd { font-family: var(--mono); font-size: 14px; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--panel); }
+.var { color: var(--var); font-weight: 500; }
+.summary { display: grid; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 0 0 22px; }
+.meter { height: 10px; background: var(--line); border-radius: 6px; overflow: hidden; }
+.meter > i { display: block; height: 100%; width: 0; background: var(--ok); border-radius: 6px; transition: width .3s; }
+.meter-row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.names { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 14px; }
+.names label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.names input { font: 15px var(--mono); padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--fg); min-width: 0; }
+.names input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 26px; padding: 0; list-style: none; }
+.toc a { display: inline-flex; gap: 6px; align-items: baseline; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; color: var(--fg); background: var(--panel); font-size: 14px; }
+.toc a .n { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.toc a.done { border-color: var(--ok); }
+section { margin: 0 0 34px; scroll-margin-top: 12px; }
+.sec-head { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: baseline; margin: 0 0 6px; }
+.sec-num { font: 700 30px/1 var(--display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.sec-meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; color: var(--muted); }
+.sync { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.notes { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 0 0 22px; display: grid; gap: 8px; }
+.notes h2 { font-size: 18px; }
+.notes p { margin: 0; font-size: 14px; color: var(--muted); }
+.notes textarea { width: 100%; box-sizing: border-box; min-height: 120px; resize: vertical; font: 15px/1.5 var(--mono); color: var(--fg); background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.notes textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.notes-foot { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.notes-foot button { font: 600 13px var(--body); padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+.notes-foot button.armed { border-color: var(--warn); color: var(--warn); }
+.notes-foot button:disabled { opacity: 0.5; cursor: default; }
+.sec-note { color: var(--muted); margin: 6px 0 12px; max-width: 66ch; }
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px 12px 12px; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 2px 10px; }
+.step.checked { border-color: var(--ok); background: linear-gradient(var(--ok-soft), var(--ok-soft)) padding-box; }
+.step input[type="checkbox"] { width: 20px; height: 20px; margin: 3px 0 0; accent-color: var(--ok); cursor: pointer; }
+.step input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step .title { font-weight: 600; cursor: pointer; }
+.step.checked .title { color: var(--muted); }
+.step .body { grid-column: 2; min-width: 0; }
+.step .body > p, .step .body > ul, .step .body > ol { margin: 6px 0; }
+.step .body ul, .step .body ol { padding-left: 20px; }
+.step .body li { margin: 3px 0; }
+.tag { display: inline-block; font: 600 11px/1.6 var(--body); letter-spacing: 0.06em; text-transform: uppercase; padding: 0 7px; border-radius: 999px; margin-left: 6px; vertical-align: 2px; }
+.tag.optional { background: var(--accent-soft); color: var(--accent); }
+.tag.phone { background: var(--warn-soft); color: var(--warn); }
+.cmd { position: relative; margin: 8px 0; }
+.cmd pre { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; padding-right: 66px; overflow-x: auto; white-space: pre; line-height: 1.5; }
+.cmd pre.prose { white-space: pre-wrap; font: 15px/1.55 var(--body); }
+.cmd button { position: absolute; top: 6px; right: 6px; font: 600 12px var(--body); padding: 4px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+.cmd button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.expect { font-size: 14px; color: var(--muted); }
+.expect b { color: var(--ok); font-weight: 600; }
+.callout { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 8px 12px; border-radius: 0 8px 8px 0; margin: 8px 0; font-size: 15px; }
+.ref { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; }
+.ref dl { margin: 10px 0; display: grid; gap: 10px; }
+.ref dt { font-weight: 600; }
+.ref dd { margin: 2px 0 0; color: var(--fg); }
+.tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.reset { font: 13px var(--body); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.reset.armed { color: var(--warn); border-color: var(--warn); }
+footer { color: var(--muted); font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 14px; }
+@media (prefers-reduced-motion: reduce) { .meter > i { transition: none; } }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">The autonomous company · Day 1</p>
+  <h1>Day 1 Mac Mini Setup</h1>
+  <p class="lede">Every step from a fresh Mac mini to the first prompt, in the order they have to happen. Allow about three hours, most of it waiting for Xcode to download. Tick each step as you finish it; your ticks stay in this browser, so each of you can track your own part.</p>
+</header>
+
+<div class="summary">
+  <div>
+    <div class="meter-row"><span id="overall-label">0 of 0 steps done</span><span id="overall-pct">0%</span></div>
+    <div class="meter" role="progressbar" aria-labelledby="overall-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="overall-bar"></i></div>
+    <p class="sync"><span id="sync">Ticks are saved in this browser only.</span> <button type="button" id="sync-fix" class="reset" hidden>Turn sharing on</button></p>
+  </div>
+  <div class="names" id="names">
+    <label for="v-org">GitHub organization<input id="v-org" data-var="org" placeholder="your-org" autocomplete="off" spellcheck="false"></label>
+    <label for="v-bot">Machine user (GitHub)<input id="v-bot" data-var="bot" placeholder="your-org-bot" autocomplete="off" spellcheck="false"></label>
+    <label for="v-acct">Mac account short name<input id="v-acct" data-var="acct" placeholder="company" autocomplete="off" spellcheck="false"></label>
+    <label for="v-host">Mac local hostname<input id="v-host" data-var="host" placeholder="company-mac-mini" autocomplete="off" spellcheck="false"></label>
+  </div>
+  <div class="tools">
+    <span class="expect">Fill these in and the commands below use them.</span>
+    <button class="reset" id="reset" type="button">Clear all ticks</button>
+  </div>
+</div>
+
+<section class="notes" aria-labelledby="notes-h">
+  <h2 id="notes-h">Shared notes</h2>
+  <p>Everyone who can open this page sees what's typed here, live. Not for passwords, codes, or keys.</p>
+  <textarea id="notes-text" maxlength="20000" spellcheck="false" placeholder="Notes for each other while you set up: which step you're on, what's waiting, what to check next."></textarea>
+  <div class="notes-foot"><span id="notes-status">Notes are kept in this browser until the shared copy connects.</span><button type="button" id="notes-clear">Clear notes</button></div>
+</section>
+
+<ul class="toc" id="toc"></ul>
+
+<section id="s-apple" data-title="Apple: the gate">
+  <div class="sec-head"><span class="sec-num">1</span><h2>Apple: the gate</h2>
+    <div class="sec-meta"><span>Who: the enrolling Investor</span><span>Start this first: identity checks can take days</span><span class="sec-count"></span></div></div>
+  <p class="sec-note">Start these first. If the membership is still pending, you can start Day 1 anyway with the instruction in section 7, and finish this section when Apple approves it: the membership by Day 7, and the agreement, tax, and banking by Day 12. Use the dedicated developer Apple Account for all of them. Doing them on the Mac mini, in Safari, puts the API key file straight into its Downloads folder.</p>
+  <ol class="steps">
+    <li class="step" data-id="apple-member"><input type="checkbox" id="c-apple-member"><label class="title" for="c-apple-member">The Apple Developer Program membership is active</label>
+      <div class="body"><p>At <a href="https://developer.apple.com/account" target="_blank" rel="noopener">developer.apple.com/account</a>, the account shows the Apple Developer Program as active. Note the <b>Team ID</b> under Membership details; you need it in section 6.</p></div></li>
+    <li class="step" data-id="apple-business"><input type="checkbox" id="c-apple-business"><label class="title" for="c-apple-business">Paid Apps Agreement, tax, and banking are complete</label>
+      <div class="body"><p>In <a href="https://appstoreconnect.apple.com" target="_blank" rel="noopener">App Store Connect</a>, <b>Business</b>: accept the Paid Apps Agreement, fill in the tax forms, and add the bank account. All three must show as active.</p></div></li>
+    <li class="step" data-id="apple-dsa"><input type="checkbox" id="c-apple-dsa"><label class="title" for="c-apple-dsa">EU trader status is declared</label>
+      <div class="body"><p>In App Store Connect, <b>Business</b>, declare trader status under the EU Digital Services Act. A paid app sold in the EU needs it.</p>
+      <p class="callout">Apple shows a trader's address, phone number, and email on the app's EU App Store page. Use the business email, and a phone number and address you're comfortable showing.</p></div></li>
+    <li class="step" data-id="apple-sbp"><input type="checkbox" id="c-apple-sbp"><label class="title" for="c-apple-sbp">The Small Business Program enrollment is submitted</label>
+      <div class="body"><p>At <a href="https://developer.apple.com/app-store/small-business-program/" target="_blank" rel="noopener">developer.apple.com/app-store/small-business-program</a>, submit the enrollment. It lowers Apple's commission to 15%, likely only after month one.</p></div></li>
+    <li class="step" data-id="apple-key"><input type="checkbox" id="c-apple-key"><label class="title" for="c-apple-key">An App Store Connect API key with the Admin role</label>
+      <div class="body"><ol><li>App Store Connect, <b>Users and Access &gt; Integrations &gt; App Store Connect API</b>, Team Keys, the <b>+</b> button.</li>
+      <li>Name it <code>company</code>, give it the <b>Admin</b> role (cloud signing needs it), and generate it.</li>
+      <li>Download the <code>.p8</code> file. Apple offers it only once. Note the <b>Key ID</b> and the <b>Issuer ID</b> shown on that page.</li></ol></div></li>
+  </ol>
+</section>
+
+<section id="s-github" data-title="GitHub">
+  <div class="sec-head"><span class="sec-num">2</span><h2>GitHub: the organization, the repositories, the machine user</h2>
+    <div class="sec-meta"><span>Who: either of you, on any computer</span><span>About 30 minutes</span><span class="sec-count"></span></div></div>
+  <ol class="steps">
+    <li class="step" data-id="gh-merge"><input type="checkbox" id="c-gh-merge"><label class="title" for="c-gh-merge">Merge the kit's latest branch into main</label>
+      <div class="body"><p>In the Launch Pack repository (<code>friesevan/autonomous-company-launch-pack</code>), open a pull request from <code>day1-site-launch</code> into <code>main</code> and merge it. <b>Use this template</b> copies only the main branch, so this comes before the next steps.</p></div></li>
+    <li class="step" data-id="gh-org"><input type="checkbox" id="c-gh-org"><label class="title" for="c-gh-org">An organization with a neutral name</label>
+      <div class="body"><p>Create a free organization at <a href="https://github.com/organizations/plan" target="_blank" rel="noopener">github.com/organizations/plan</a>. Its name becomes the site's address before the company has a name, so pick something neutral, after the experiment rather than a brand. A custom domain can carry the brand later.</p></div></li>
+    <li class="step" data-id="gh-company"><input type="checkbox" id="c-gh-company"><label class="title" for="c-gh-company">The <code>company</code> repository, from the template</label>
+      <div class="body"><p>Open the Launch Pack repository, then <b>Use this template &gt; Create a new repository</b>: owner <span class="var" data-show="org">your-org</span>, name <code>company</code>, <b>Private</b>. If the button is missing, tick <b>Template repository</b> in the Launch Pack's <b>Settings</b>.</p>
+      <p>Then open the new repository's <b>Actions</b> tab once. If GitHub asks to enable workflows, enable them; the watchdog runs there.</p></div></li>
+    <li class="step" data-id="gh-site"><input type="checkbox" id="c-gh-site"><label class="title" for="c-gh-site">The site repository, with Pages on</label>
+      <div class="body"><ol><li>New repository, owner <span class="var" data-show="org">your-org</span>, name <code><span class="var" data-show="org">your-org</span>.github.io</code>, <b>Public</b>, with <b>Add a README</b> ticked, so its main branch exists.</li>
+      <li>Its <b>Settings &gt; Pages</b>: Deploy from a branch, <code>main</code>, <code>/ (root)</code>, Save.</li></ol>
+      <p class="expect">The site stays private in practice until you approve it: the company pushes to it only after you set <code>"publish": true</code> (section 7).</p></div></li>
+    <li class="step" data-id="gh-bot"><input type="checkbox" id="c-gh-bot"><label class="title" for="c-gh-bot">The machine user, with write access to both repositories</label>
+      <div class="body"><ol><li>Sign out, and create a second, free GitHub account for the company, for example <span class="var" data-show="bot">your-org-bot</span>. It needs its own email; a plus address of the business email works (<code>name+bot@…</code>).</li>
+      <li>As an organization owner: <b>People &gt; Invite member</b>, the machine user, role Member. Accept the invitation as the machine user.</li>
+      <li>In each of the two repositories: <b>Settings &gt; Collaborators and teams &gt; Add people</b>, the machine user, role <b>Write</b>.</li></ol>
+      <p>The company posts and replies from this account, so its comments are never confused with yours.</p></div></li>
+    <li class="step" data-id="gh-token"><input type="checkbox" id="c-gh-token"><label class="title" for="c-gh-token">The machine user's token</label>
+      <div class="body"><p>Signed in as the machine user: <b>Settings &gt; Developer settings &gt; Personal access tokens &gt; Fine-grained tokens &gt; Generate new token</b>.</p>
+      <ul><li>Name: <code>company Mac mini</code>. Resource owner: <span class="var" data-show="org">your-org</span>. Expiration: as long as allowed.</li>
+      <li>Repository access: <b>Only select repositories</b>: <code>company</code> and <code><span class="var" data-show="org">your-org</span>.github.io</code>.</li>
+      <li>Repository permissions, read and write: <b>Contents</b>, <b>Issues</b>, and <b>Variables</b> (the heartbeat for the watchdog). Metadata is added as read-only. Nothing else: no Workflows, no Administration.</li></ul>
+      <p>Generate it and keep it at hand; you paste it on the Mac in section 6. If the organization requires approval, an owner approves it under the organization's <b>Settings &gt; Personal access tokens &gt; Pending requests</b>. Put the expiry date in your calendars: when it expires, the watchdog alerts you.</p></div></li>
+    <li class="step" data-id="gh-allow"><input type="checkbox" id="c-gh-allow"><label class="title" for="c-gh-allow">Your two usernames in the allowlist</label>
+      <div class="body"><p>In <code>company</code> on github.com, open <code>investors/allowlist.md</code>, edit it, replace the two bracketed lines with your GitHub usernames (one per line, no @), and commit. Only these accounts can instruct the company.</p></div></li>
+    <li class="step" data-id="gh-label"><input type="checkbox" id="c-gh-label"><label class="title" for="c-gh-label">The <code>emergency</code> label<span class="tag optional">optional</span></label>
+      <div class="body"><p>In <code>company</code>: <b>Issues &gt; Labels &gt; New label</b>, name <code>emergency</code>. The Day 1 session creates all the labels anyway; making this one now lets the watchdog test in section 6 use it.</p></div></li>
+    <li class="step" data-id="gh-phones"><input type="checkbox" id="c-gh-phones"><label class="title" for="c-gh-phones">Push notifications on both phones<span class="tag phone">each of you</span></label>
+      <div class="body"><ol><li>Install the GitHub app and sign in with your own account.</li>
+      <li>Open <code>company</code>, tap <b>Watch</b>, choose <b>All activity</b>.</li>
+      <li>In the app's notification settings, turn on push for <b>Participating</b> and <b>Watching</b>; in iOS Settings, allow GitHub notifications.</li></ol>
+      <p>This is how emergencies, urgent requests, and reports reach you, at any hour for emergencies.</p></div></li>
+  </ol>
+</section>
+
+<section id="s-macos" data-title="macOS settings">
+  <div class="sec-head"><span class="sec-num">3</span><h2>The Mac mini: macOS</h2>
+    <div class="sec-meta"><span>At the Mac, with a keyboard and display</span><span>About 30 minutes</span><span class="sec-count"></span></div></div>
+  <p class="sec-note">Everything from here on happens in the company's macOS account. Plug in Ethernet if you can.</p>
+  <ol class="steps">
+    <li class="step" data-id="mac-account"><input type="checkbox" id="c-mac-account"><label class="title" for="c-mac-account">The company's account, an Administrator, with no Apple Account</label>
+      <div class="body"><p>On a freshly erased Mac, the setup assistant creates it: name it, for example, <code><span class="var" data-show="acct">company</span></code>. At the Apple Account step choose <b>Set Up Later</b>, and skip iCloud, Siri, and Screen Time. If the Mac already has another account, add this one in <b>Users &amp; Groups</b> as an Administrator and sign in to it. Keep no personal data on this Mac.</p></div></li>
+    <li class="step" data-id="mac-update"><input type="checkbox" id="c-mac-update"><label class="title" for="c-mac-update">macOS is up to date</label>
+      <div class="body"><p><b>System Settings &gt; General &gt; Software Update</b>: install everything offered, and restart. The current Xcode needs a current macOS, and macOS 26 or later lets you unlock FileVault over SSH.</p></div></li>
+    <li class="step" data-id="mac-autoupdate"><input type="checkbox" id="c-mac-autoupdate"><label class="title" for="c-mac-autoupdate">Automatic updates: security on, upgrades off</label>
+      <div class="body"><p>Same pane, the <b>ⓘ</b> beside Automatic Updates:</p>
+      <ul><li>On: Check for updates, Download new updates when available, <b>Install Security Responses and system files</b>.</li>
+      <li>Off: <b>Install macOS updates</b> and <b>Install application updates from the App Store</b>. A surprise restart or Xcode update mid-month can stop the company until someone is at the Mac.</li></ul></div></li>
+    <li class="step" data-id="mac-tz"><input type="checkbox" id="c-mac-tz"><label class="title" for="c-mac-tz">Eastern time</label>
+      <div class="body"><p><b>General &gt; Date &amp; Time</b>: set the time zone to New York, so the Mac's logs match the reports' times.</p></div></li>
+    <li class="step" data-id="mac-security"><input type="checkbox" id="c-mac-security"><label class="title" for="c-mac-security">FileVault and the firewall on</label>
+      <div class="body"><p><b>Privacy &amp; Security &gt; FileVault</b>: turn it on, and keep the recovery key in your password manager, not on the Mac. <b>Network &gt; Firewall</b>: turn it on. The company checks both every 15 minutes and alerts you if either is switched off.</p></div></li>
+    <li class="step" data-id="mac-energy"><input type="checkbox" id="c-mac-energy"><label class="title" for="c-mac-energy">Never sleep, restart after a power cut</label>
+      <div class="body"><p><b>Energy</b>: turn on Prevent automatic sleeping when the display is off, Wake for network access, and Start up automatically after a power failure. <b>Lock Screen</b>: Start Screen Saver when inactive, Never.</p>
+      <p class="callout">With FileVault on, after any restart the Mac waits at its password screen and nothing runs until someone unlocks it. The watchdog tells you within about an hour; section 8 shows how to unlock it over SSH.</p></div></li>
+    <li class="step" data-id="mac-sharing"><input type="checkbox" id="c-mac-sharing"><label class="title" for="c-mac-sharing">Screen Sharing and Remote Login, for the company account only</label>
+      <div class="body"><p><b>General &gt; Sharing</b>: turn on <b>Screen Sharing</b> and <b>Remote Login</b>, and for each choose Allow access for <b>Only these users</b>: the company account. Note the <b>Local hostname</b> at the bottom of that pane and type it in the box at the top of this page.</p></div></li>
+    <li class="step" data-id="mac-sudo"><input type="checkbox" id="c-mac-sudo"><label class="title" for="c-mac-sudo">Passwordless sudo for the company account</label>
+      <div class="body"><p>In <b>Terminal</b>, run these three lines. The first asks for the account password once.</p>
+      <div class="cmd"><pre>echo "$(whoami) ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/company &gt;/dev/null
+sudo chmod 440 /etc/sudoers.d/company
+sudo visudo -cf /etc/sudoers.d/company</pre><button type="button">Copy</button></div>
+      <p class="expect">Expect <b>parsed OK</b>. Then check that sudo no longer asks:</p>
+      <div class="cmd"><pre>sudo -k; sudo -n true &amp;&amp; echo "sudo works without a password"</pre><button type="button">Copy</button></div>
+      <p class="callout">This was your choice, and it carries a risk: a web page the company reads could try to steer a session into admin commands. The guard hooks refuse the commands that would weaken security, every sudo command is logged, the posture check notices a protection switched off, and the watchdog runs outside the Mac. With passwordless sudo, nothing on the Mac is tamper-proof.</p></div></li>
+    <li class="step" data-id="mac-tm"><input type="checkbox" id="c-mac-tm"><label class="title" for="c-mac-tm">Time Machine to an external drive<span class="tag optional">optional</span></label>
+      <div class="body"><p>Only if you have a spare drive. The company pushes everything that matters to GitHub after every run.</p></div></li>
+  </ol>
+</section>
+
+<section id="s-software" data-title="Software">
+  <div class="sec-head"><span class="sec-num">4</span><h2>The Mac mini: software</h2>
+    <div class="sec-meta"><span>At the Mac, in Terminal</span><span>About 1 to 2 hours, mostly Xcode downloading</span><span class="sec-count"></span></div></div>
+  <ol class="steps">
+    <li class="step" data-id="sw-xcode"><input type="checkbox" id="c-sw-xcode"><label class="title" for="c-sw-xcode">Xcode, from the App Store</label>
+      <div class="body"><ol><li>Open the <b>App Store</b> app, <b>Store &gt; Sign In</b>, with the developer Apple Account. Sign in to the App Store only, never iCloud.</li>
+      <li>Install <b>Xcode</b>. It is large; start it now and continue with the next steps while it downloads.</li></ol></div></li>
+    <li class="step" data-id="sw-brew"><input type="checkbox" id="c-sw-brew"><label class="title" for="c-sw-brew">Homebrew, then gh and jq</label>
+      <div class="body"><div class="cmd"><pre>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</pre><button type="button">Copy</button></div>
+      <p>When it finishes, it prints the lines that put Homebrew on the PATH. Run them:</p>
+      <div class="cmd"><pre>echo &gt;&gt; ~/.zprofile
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' &gt;&gt; ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"</pre><button type="button">Copy</button></div>
+      <div class="cmd"><pre>brew install gh jq</pre><button type="button">Copy</button></div></div></li>
+    <li class="step" data-id="sw-xcode-setup"><input type="checkbox" id="c-sw-xcode-setup"><label class="title" for="c-sw-xcode-setup">Xcode's first launch, the iOS platform, and the developer account</label>
+      <div class="body"><ol><li>Open Xcode once, agree to the license, and let it install its components.</li>
+      <li><b>Xcode &gt; Settings &gt; Components</b>: install the <b>iOS</b> platform and the current iOS Simulator runtime. One runtime is enough.</li>
+      <li><b>Settings &gt; Accounts</b>, the <b>+</b> button, Apple Account: add the developer Apple Account. It asks for a two-factor code once.</li></ol></div></li>
+    <li class="step" data-id="sw-select"><input type="checkbox" id="c-sw-select"><label class="title" for="c-sw-select">Point the command-line tools at Xcode</label>
+      <div class="body"><p>After Homebrew, because its installer can switch them to a separate Command Line Tools package:</p>
+      <div class="cmd"><pre>sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+sudo xcodebuild -license accept
+xcodebuild -runFirstLaunch</pre><button type="button">Copy</button></div></div></li>
+    <li class="step" data-id="sw-claude"><input type="checkbox" id="c-sw-claude"><label class="title" for="c-sw-claude">Claude Code</label>
+      <div class="body"><div class="cmd"><pre>curl -fsSL https://claude.ai/install.sh | bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' &gt;&gt; ~/.zprofile</pre><button type="button">Copy</button></div>
+      <p>Open a new Terminal window, then check the version. It must be 2.1.293 or later.</p>
+      <div class="cmd"><pre>claude --version</pre><button type="button">Copy</button></div></div></li>
+    <li class="step" data-id="sw-pin"><input type="checkbox" id="c-sw-pin"><label class="title" for="c-sw-pin">Claude Code's auto-updates off</label>
+      <div class="body"><p>Claude Code's docs say a future release will change how headless runs start, which would break the run loop. The company updates deliberately instead, and smoke-tests each new version first.</p>
+      <div class="cmd"><pre>mkdir -p ~/.claude
+test -f ~/.claude/settings.json || echo '{"env": {"DISABLE_AUTOUPDATER": "1"}}' &gt; ~/.claude/settings.json
+cat ~/.claude/settings.json
+claude doctor | grep -i "auto-update"</pre><button type="button">Copy</button></div>
+      <p class="expect">Expect <b>disabled</b>. If the file already existed without that <code>env</code> entry, add it by hand.</p></div></li>
+    <li class="step" data-id="sw-login"><input type="checkbox" id="c-sw-login"><label class="title" for="c-sw-login">Claude Code signed in to the company's Claude Max account</label>
+      <div class="body"><p>Run <code>claude</code>, follow the browser sign-in with the company's Claude Max (20x) account, then type <code>/exit</code>. Use an account nobody uses for anything else: personal chats would eat the company's limits.</p></div></li>
+  </ol>
+</section>
+
+<section id="s-claude" data-title="Claude account">
+  <div class="sec-head"><span class="sec-num">5</span><h2>The Claude account</h2>
+    <div class="sec-meta"><span>On claude.ai, signed in as the company's account</span><span>About 10 minutes</span><span class="sec-count"></span></div></div>
+  <ol class="steps">
+    <li class="step" data-id="cl-credits"><input type="checkbox" id="c-cl-credits"><label class="title" for="c-cl-credits">Usage credits off</label>
+      <div class="body"><p><b>Settings &gt; Usage</b>: leave usage credits switched off. With them off, reaching a limit pauses work instead of billing. The company reads the plan's meter every 15 minutes and alerts you if they are ever switched on.</p></div></li>
+    <li class="step" data-id="cl-api"><input type="checkbox" id="c-cl-api"><label class="title" for="c-cl-api">The included API credits, for overflow<span class="tag optional">optional</span></label>
+      <div class="body"><p>The plan includes $200 a month of API credits. The company uses them only while a plan limit has paused work: never Fable, at most $50 a week, and never past $190 a cycle. Skip this step and overflow simply stays off.</p>
+      <ol><li><b>Settings &gt; Billing</b>: link a Claude Console organization.</li>
+      <li>In the Console, create a workspace for the company and set its monthly spend limit to $180: a hard cap that holds even if the company's own count is wrong. Leave auto-reload off and buy no credits.</li>
+      <li>Create an API key in that workspace. On the Mac, store it in the Keychain; the command asks for it twice:</li></ol>
+      <div class="cmd"><pre>security add-generic-password -s company-api-credits -a company -T /usr/bin/security -w</pre><button type="button">Copy</button></div>
+      <p class="expect">Sessions can't read it: the permission rules and the security guard block that. To turn overflow off later, set <code>api_overflow</code> to false in <code>investors/billing.json</code> on github.com.</p></div></li>
+  </ol>
+</section>
+
+<section id="s-connect" data-title="Connect and test">
+  <div class="sec-head"><span class="sec-num">6</span><h2>The Mac mini: GitHub, the repository, the tests</h2>
+    <div class="sec-meta"><span>At the Mac, in Terminal</span><span>About 30 minutes</span><span class="sec-count"></span></div></div>
+  <ol class="steps">
+    <li class="step" data-id="cn-gh"><input type="checkbox" id="c-cn-gh"><label class="title" for="c-cn-gh">gh signed in as the machine user</label>
+      <div class="body"><div class="cmd"><pre>gh auth login</pre><button type="button">Copy</button></div>
+      <p>Choose GitHub.com, HTTPS, answer Yes to authenticating Git, choose <b>Paste an authentication token</b>, and paste the machine user's token. Then:</p>
+      <div class="cmd"><pre>gh auth setup-git
+gh auth status</pre><button type="button">Copy</button></div>
+      <p class="expect">Expect <b>Logged in to github.com account <span class="var" data-show="bot">your-org-bot</span></b>.</p></div></li>
+    <li class="step" data-id="cn-git"><input type="checkbox" id="c-cn-git"><label class="title" for="c-cn-git">Git's identity: the machine user</label>
+      <div class="body"><p>Its noreply address is in the machine user's GitHub <b>Settings &gt; Emails</b>.</p>
+      <div class="cmd"><pre>git config --global user.name "<span class="var" data-show="bot">your-org-bot</span>"
+git config --global user.email "<span class="var">ID+</span><span class="var" data-show="bot">your-org-bot</span>@users.noreply.github.com"</pre><button type="button">Copy</button></div></div></li>
+    <li class="step" data-id="cn-clone"><input type="checkbox" id="c-cn-clone"><label class="title" for="c-cn-clone">The repository, in the home folder</label>
+      <div class="body"><p>In the home folder, not Desktop or Documents: macOS blocks background jobs from those folders.</p>
+      <div class="cmd"><pre>cd ~ &amp;&amp; gh repo clone <span class="var" data-show="org">your-org</span>/company &amp;&amp; cd company
+ls -l tools/supervisor.sh rules/hooks/security-guard.py</pre><button type="button">Copy</button></div>
+      <p class="expect">Both lines start with <b>-rwx</b>. If not: <code>chmod +x rules/*.py rules/*.sh rules/hooks/* tools/*.sh tools/*.py tests/*.sh tests/*.py</code>, then commit and push.</p></div></li>
+    <li class="step" data-id="cn-asc"><input type="checkbox" id="c-cn-asc"><label class="title" for="c-cn-asc">The App Store Connect key on the Mac</label>
+      <div class="body"><p class="callout">Apple still pending? Skip this step for now. Do it once Apple approves the membership and you've created the key, then tell the company in a comment on any issue.</p>
+      <p>Move the <code>.p8</code> file from section 1 into place, and record the three IDs in a file git ignores:</p>
+      <div class="cmd"><pre>mkdir -p ~/.appstoreconnect/private_keys
+mv ~/Downloads/AuthKey_*.p8 ~/.appstoreconnect/private_keys/
+cat &gt; ~/company/ops/secrets.local &lt;&lt;'EOF'
+ASC_KEY_ID=your-key-id
+ASC_ISSUER_ID=your-issuer-id
+APPLE_TEAM_ID=your-team-id
+EOF</pre><button type="button">Copy</button></div>
+      <p class="expect">Then open <code>~/company/ops/secrets.local</code> in TextEdit and replace the three values.</p></div></li>
+    <li class="step" data-id="cn-tests"><input type="checkbox" id="c-cn-tests"><label class="title" for="c-cn-tests">The kit's tests pass</label>
+      <div class="body"><p>A few minutes, no Claude usage, nothing sent anywhere:</p>
+      <div class="cmd"><pre>tests/run.sh</pre><button type="button">Copy</button></div>
+      <p class="expect">Expect <b>All tests passed.</b></p></div></li>
+    <li class="step" data-id="cn-trust"><input type="checkbox" id="c-cn-trust"><label class="title" for="c-cn-trust">The folder is trusted</label>
+      <div class="body"><p>In <code>~/company</code>, run <code>claude</code>, choose <b>Yes, I trust this folder</b>, then type <code>/exit</code>. Headless runs use the project's allow rules only after this.</p></div></li>
+    <li class="step" data-id="cn-smoke"><input type="checkbox" id="c-cn-smoke"><label class="title" for="c-cn-smoke">The smoke test passes</label>
+      <div class="body"><p>One tiny real run with the run loop's own flags. It costs about a cent of usage.</p>
+      <div class="cmd"><pre>tools/smoke_test.sh</pre><button type="button">Copy</button></div>
+      <p class="expect">Expect six <b>PASS</b> lines: the version, a session ran, billed to the subscription, auto mode, the hooks ran, and CLAUDE.md loaded. A FAIL line prints what to fix.</p></div></li>
+    <li class="step" data-id="cn-heartbeat"><input type="checkbox" id="c-cn-heartbeat"><label class="title" for="c-cn-heartbeat">The heartbeat reaches GitHub</label>
+      <div class="body"><div class="cmd"><pre>tools/heartbeat.sh &amp;&amp; gh variable list</pre><button type="button">Copy</button></div>
+      <p class="expect">Expect a <b>HEARTBEAT_AT</b> line with the current time. If it fails, the token lacks the Variables permission.</p></div></li>
+    <li class="step" data-id="cn-watchdog"><input type="checkbox" id="c-cn-watchdog"><label class="title" for="c-cn-watchdog">The watchdog's test alert reaches both phones</label>
+      <div class="body"><p>On github.com, in <code>company</code>: <b>Actions &gt; Watchdog &gt; Run workflow</b>, tick <b>test</b>, and run it. Within a minute or two you both get a notification for "Watchdog test: you can ignore this", and the issue closes itself.</p>
+      <p class="expect">The watchdog runs every 30 minutes on GitHub's servers. Once Day 1 has started, it opens an emergency if the Mac goes 45 minutes without a heartbeat, and closes it when the Mac is back.</p></div></li>
+  </ol>
+</section>
+
+<section id="s-start" data-title="Start Day 1">
+  <div class="sec-head"><span class="sec-num">7</span><h2>Start Day 1</h2>
+    <div class="sec-meta"><span>At the Mac</span><span>The 30-day clock starts with the prompt</span><span class="sec-count"></span></div></div>
+  <ol class="steps">
+    <li class="step" data-id="st-gate"><input type="checkbox" id="c-st-gate"><label class="title" for="c-st-gate">The gate is clear</label>
+      <div class="body"><ul><li>The Mac mini is set up: sections 3, 4, and 6 are ticked.</li>
+      <li>GitHub is set up, and both usernames are in <code>investors/allowlist.md</code>.</li>
+      <li>Apple: the membership is active, the Paid Apps Agreement, tax, banking, and EU trader status are done, and the Small Business Program enrollment is submitted. If the membership is still pending, use the next step.</li></ul></div></li>
+    <li class="step" data-id="st-apple"><input type="checkbox" id="c-st-apple"><label class="title" for="c-st-apple">If Apple is still pending: give this instruction first</label>
+      <div class="body"><p>The Commandments make the Apple steps part of the gate, so starting without them needs your instruction, which the company records as an amendment. Run the command in the next step to open Claude Code, but before pasting the Day 1 prompt, copy this instruction, put your GitHub username in place of the brackets, send it as your first message, and wait for the reply.</p>
+      <div class="cmd"><pre class="prose">Investor instruction: start Day 1 now, before the Apple part of the gate is complete. Our Apple Developer Program enrollment is still pending, so the Paid Apps Agreement, tax, banking, EU trader status, the Small Business Program enrollment, and the App Store Connect API key will follow once Apple approves it. Deadlines: the membership active by Day 7, and the Paid Apps Agreement, tax, and banking active by Day 12. Until then, build and test on the Simulator, test purchases with StoreKit testing in Xcode, and plan nothing that needs App Store Connect or TestFlight before the membership is active. Every report lists the Apple status under Upcoming needs; if a deadline passes, the next report says what it puts at risk for the Day 30 target and what you recommend. This changes the gate in the Mission's timeline and Commandment 60, item 2. Record it in amendments.md as an instruction from [your GitHub username], typed into the Day 1 session. The Day 1 prompt follows in my next message.</pre><button type="button">Copy</button></div>
+      <p class="expect">Expect a short reply confirming the amendment. Then put the Day 1 prompt back on the clipboard from a second Terminal window, paste it into Claude Code as the second message, and press <kbd>Return</kbd>:</p>
+      <div class="cmd"><pre>pbcopy &lt; ~/company/ops/prompts/day1.md</pre><button type="button">Copy</button></div></div></li>
+    <li class="step" data-id="st-prompt"><input type="checkbox" id="c-st-prompt"><label class="title" for="c-st-prompt">Run the Day 1 prompt</label>
+      <div class="body"><div class="cmd"><pre>cd ~/company &amp;&amp; pbcopy &lt; ops/prompts/day1.md &amp;&amp; claude --model opus</pre><button type="button">Copy</button></div>
+      <p>When Claude Code opens, paste with <kbd>⌘</kbd> <kbd>V</kbd> and press <kbd>Return</kbd>. Day 1 runs on Opus: the CEO and the Handbook shape the whole month. It records today as Day 1, holds the run loop while it works, installs and tests it, and hands over when done.</p></div></li>
+    <li class="step" data-id="st-watch"><input type="checkbox" id="c-st-watch"><label class="title" for="c-st-watch">Stay for the first hour</label>
+      <div class="body"><p>If it asks permission for something, answer <b>Yes</b> rather than "Yes, and don't ask again". Then step back; the run loop takes over at the next 15-minute tick.</p></div></li>
+    <li class="step" data-id="st-report"><input type="checkbox" id="c-st-report"><label class="title" for="c-st-report">At 6 p.m. Eastern: Report 1</label>
+      <div class="body"><p>The CEO's first report arrives as a GitHub issue labeled <code>report</code>, with her persona, the portrait style, and the site for your approval. Answer its questions in a comment by midnight.</p>
+      <p>To put the site online once you approve it: in <code>company</code> on github.com, edit <code>investors/site/settings.json</code>, set <code>"publish": true</code>, and commit. It's live at <code>https://<span class="var" data-show="org">your-org</span>.github.io</code> within about 15 minutes.</p></div></li>
+  </ol>
+</section>
+
+<section id="s-after" data-title="After Day 1">
+  <div class="sec-head"><span class="sec-num">8</span><h2>After Day 1: what you'll use</h2>
+    <div class="sec-meta"><span>Keep this for the month</span></div></div>
+  <div class="ref"><dl>
+    <dt>Answering a report</dt>
+    <dd>Comment on its issue: plain language works, or "1: A", "APPROVE 3", "REJECT 2: too busy". Answer as often as you like; your latest answer counts, and one that comes after a default still counts. Every message gets a reply saying what the company understood, or a short automatic receipt if it can't reply right away.</dd>
+    <dt>Messaging the company</dt>
+    <dd>Open a new issue in <code>company</code> (the <code>directive</code> label is suggested) or comment on any issue. It reads every message from your accounts within about 15 minutes.</dd>
+    <dt>Pausing and resuming</dt>
+    <dd>Start a comment or a new issue with <code>PAUSE</code> or <code>STOP</code>. Within about 5 minutes nothing runs, even in the middle of a session, and it confirms in the thread. <code>RESUME</code> restarts it the same way.</dd>
+    <dt>"The company has stopped: no heartbeat from the Mac mini"</dt>
+    <dd>The watchdog's emergency. Check, in order: a restart or power cut left the Mac at the FileVault screen (unlock it at the Mac, or from a computer on the same network with <code>ssh <span class="var" data-show="acct">company</span>@<span class="var" data-show="host">company-mac-mini</span>.local</code> and the account password); the network; an expired GitHub token (make a new one, then <code>gh auth login</code> on the Mac); or a stopped run loop (<code>tail -50 ~/company/ops/runs/supervisor.log</code>). The issue closes itself when the heartbeat returns.</dd>
+    <dt>Other emergencies</dt>
+    <dd>Claude Code logged out (run <code>claude</code>, then <code>/login</code>), runs failing three ticks in a row, a security setting switched off, a session that changed your files (the supervisor puts them back), an amendment that doesn't quote your message word for word (it's removed), usage credits found on, or a new Claude Code version failing its smoke test (the company pauses itself; fix it, then reply <code>RESUME</code>).</dd>
+    <dt>Following along</dt>
+    <dd>The site's Usage page shows the plan's limits, the plan by now, and why the company is ahead or behind. Its Subscribe page lists three feeds for a feed reader: reports, product updates, and the records.</dd>
+    <dt>When it ends, or for a long pause</dt>
+    <dd>Turn off the watchdog: in <code>company</code>, <b>Actions &gt; Watchdog</b>, the <b>⋯</b> menu, <b>Disable workflow</b>. Then stop the loop on the Mac: <code>launchctl bootout gui/$(id -u)/com.company.supervisor</code>.</dd>
+  </dl></div>
+</section>
+
+<footer>The full guides are in the <code>company</code> repository: <code>setup/INVESTORS.md</code> (this setup, with the reasons), <code>setup/APPLE.md</code>, and <code>setup/OPERATIONS.md</code>.</footer>
+</div>
+
+<script>
+(function () {
+  var KEY = "day1-setup-v1";
+  var state = { checks: {}, vars: {} };
+  try { var saved = JSON.parse(localStorage.getItem(KEY) || "null"); if (saved && typeof saved === "object") { state.checks = saved.checks || {}; state.vars = saved.vars || {}; } } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  var steps = Array.prototype.slice.call(document.querySelectorAll(".step"));
+  var sections = Array.prototype.slice.call(document.querySelectorAll("section[data-title]"));
+
+  // Table of contents, built from the sections that have steps.
+  var toc = document.getElementById("toc");
+  sections.forEach(function (sec, i) {
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    a.id = "toc-" + sec.id;
+    a.innerHTML = (i + 1) + ". " + sec.getAttribute("data-title") + ' <span class="n"></span>';
+    li.appendChild(a);
+    toc.appendChild(li);
+  });
+
+  function refresh() {
+    var total = steps.length, done = 0;
+    steps.forEach(function (st) {
+      var on = !!state.checks[st.getAttribute("data-id")];
+      st.querySelector("input[type=checkbox]").checked = on;
+      st.classList.toggle("checked", on);
+      if (on) done++;
+    });
+    sections.forEach(function (sec) {
+      var s = sec.querySelectorAll(".step"), d = sec.querySelectorAll(".step.checked").length;
+      var count = sec.querySelector(".sec-count");
+      if (count && s.length) count.textContent = d + " of " + s.length + " done";
+      var link = document.querySelector("#toc-" + sec.id + " .n");
+      if (link) link.textContent = s.length ? d + "/" + s.length : "";
+      var a = document.getElementById("toc-" + sec.id);
+      if (a) a.classList.toggle("done", s.length > 0 && d === s.length);
+    });
+    var pct = total ? Math.round(100 * done / total) : 0;
+    document.getElementById("overall-label").textContent = done + " of " + total + " steps done";
+    document.getElementById("overall-pct").textContent = pct + "%";
+    document.getElementById("overall-bar").style.width = pct + "%";
+    document.querySelector(".meter[role=progressbar]").setAttribute("aria-valuenow", String(pct));
+  }
+
+  // Shared ticks: one document everyone with access reads and writes, live. The first time a
+  // browser opens the shared version, the ticks it already has are added to the shared set.
+  // A viewer whose access can't change shared data can still tick every box: their ticks are kept
+  // on their device (`mine`) and shown on top of the shared list.
+  var MERGED = "day1-setup-merged", MINE = "day1-setup-mine", shared = null, readOnly = false, chain = Promise.resolve();
+  var mine = {}; try { mine = JSON.parse(localStorage.getItem(MINE) || "{}") || {}; } catch (e) {}
+  function saveMine() { try { localStorage.setItem(MINE, JSON.stringify(mine)); } catch (e) {} }
+  var remoteChecks = {};
+  function shown() { return Object.assign({}, remoteChecks, readOnly ? mine : {}); }
+  var syncEl = document.getElementById("sync");
+  function say(t) { syncEl.textContent = t; }
+  var READ_ONLY_MSG = "Your ticks are saved on this device only: your access to this page can't change the shared list. The page's owner can invite you as an Editor from the Share menu.";
+  function goReadOnly() {
+    if (readOnly) return;
+    readOnly = true;
+    Object.keys(state.checks).forEach(function (k) { if (!!state.checks[k] !== !!remoteChecks[k]) mine[k] = !!state.checks[k]; });
+    saveMine(); state.checks = shown(); save(); refresh(); say(READ_ONLY_MSG);
+  }
+  function write(fn) {   // one write at a time to the document
+    chain = chain.then(fn).catch(function (e) {
+      if (e && e.code === "invalid_argument") goReadOnly();
+      else say("Couldn't save the last tick to the shared list (" + ((e && e.code) || "error") + "). It's kept in this browser; try again in a moment.");
+    });
+  }
+  function pushTick(id, on) {
+    if (readOnly) { mine[id] = on; saveMine(); return; }
+    if (!shared) return;
+    var patch = {}; patch[id] = on;
+    write(function () {
+      return shared.update({ checks: patch, at: new Date().toISOString() }).catch(function (e) {
+        if (e && e.code === "invalid_argument") return shared.set({ checks: Object.assign({}, state.checks), at: new Date().toISOString() });
+        throw e;
+      });
+    });
+  }
+  function pushAll() {
+    if (readOnly) { mine = {}; Object.keys(remoteChecks).forEach(function (k) { if (remoteChecks[k]) mine[k] = false; }); saveMine(); state.checks = shown(); save(); refresh(); return; }
+    if (shared) write(function () { return shared.set({ checks: Object.assign({}, state.checks), at: new Date().toISOString() }); });
+  }
+  function connect(db, canWrite) {
+    try { shared = db.doc("shared/checks"); } catch (e) { return; }
+    if (canWrite === false) { readOnly = true; say(READ_ONLY_MSG); }
+    var first = true;
+    shared.onSnapshot(function (snap) {
+      remoteChecks = (snap.exists && snap.data().checks) || {};
+      if (first) {
+        first = false;
+        var merged = false; try { merged = localStorage.getItem(MERGED) === "1"; } catch (e) {}
+        var add = merged ? [] : Object.keys(state.checks).filter(function (k) { return state.checks[k] && !remoteChecks[k]; });
+        if (readOnly) { add.forEach(function (k) { mine[k] = true; }); saveMine(); }
+        state.checks = shown();
+        if (!merged && !readOnly) {
+          add.forEach(function (k) { state.checks[k] = true; });
+          if (add.length || !snap.exists) pushAll();
+        }
+        try { localStorage.setItem(MERGED, "1"); } catch (e) {}
+      } else if (!snap.metadata.hasPendingWrites) {
+        state.checks = shown();
+      }
+      save(); refresh();
+      if (!readOnly) say("Ticks are shared: everyone with access to this page sees the same list, live.");
+    }, function (e) { say("Lost the connection to the shared list (" + ((e && e.code) || "error") + "). Reload the page to see the latest ticks."); });
+  }
+  // Shared notes: one document, saved a moment after typing stops; other people's edits appear
+  // live unless you're in the middle of typing.
+  var notesEl = document.getElementById("notes-text"), notesStatus = document.getElementById("notes-status");
+  var notesClear = document.getElementById("notes-clear"), notesDoc = null, notesTimer = null, notesDirty = false;
+  var notesChain = Promise.resolve(), notesArmed = null;
+  function noteSay(t) { notesStatus.textContent = t; }
+  function when(iso) {
+    var d = new Date(iso); if (isNaN(d)) return "";
+    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+  function saveNotes() {
+    if (!notesDoc) return;
+    var text = notesEl.value, at = new Date().toISOString();
+    notesChain = notesChain.then(function () { return notesDoc.set({ text: text, at: at }); }).then(function () {
+      if (notesEl.value === text) notesDirty = false;
+      noteSay("Saved for everyone, " + when(at) + ".");
+    }, function (e) {
+      if (e && e.code === "invalid_argument") { notesEl.readOnly = true; notesClear.disabled = true; noteSay("You can read these notes but not change them."); }
+      else noteSay("Couldn't save (" + ((e && e.code) || "error") + "). Your text is still here; type again to retry.");
+    });
+  }
+  notesEl.addEventListener("input", function () {
+    notesDirty = true; noteSay(notesDoc ? "Saving…" : "Not shared yet: this view has no connection to the shared copy.");
+    clearTimeout(notesTimer); notesTimer = setTimeout(saveNotes, 800);
+  });
+  notesClear.addEventListener("click", function () {
+    if (!notesArmed) {
+      notesClear.textContent = "Press again to clear for everyone"; notesClear.classList.add("armed");
+      notesArmed = setTimeout(function () { notesArmed = null; notesClear.textContent = "Clear notes"; notesClear.classList.remove("armed"); }, 4000);
+      return;
+    }
+    clearTimeout(notesArmed); notesArmed = null; notesClear.textContent = "Clear notes"; notesClear.classList.remove("armed");
+    notesEl.value = ""; notesDirty = true; clearTimeout(notesTimer); saveNotes();
+  });
+  function connectNotes(db) {
+    try { notesDoc = db.doc("shared/notes"); } catch (e) { return; }
+    notesDoc.onSnapshot(function (snap) {
+      if (snap.metadata.hasPendingWrites) return;
+      var d = snap.exists ? snap.data() : {};
+      if (!notesDirty) notesEl.value = d.text || "";
+      noteSay(d.at ? "Shared. Last saved " + when(d.at) + "." : "Shared: anything typed here is saved for everyone.");
+    }, function (e) { noteSay("Lost the connection to the shared notes (" + ((e && e.code) || "error") + "). Reload the page to see the latest."); });
+  }
+
+  // Connecting: ask for the shared store's permission once, up front, and say plainly what happened,
+  // so a view that isn't sharing is never mistaken for one that is.
+  var fixBtn = document.getElementById("sync-fix");
+  function offline(t) { say(t); noteSay(t); }
+  function start(db) {
+    if (!db) { offline("Not shared in this view: open the page at claude.ai, signed in, to share ticks and notes. Changes here stay in this browser."); return; }
+    window.claude.use("user").then(function (u) { return u ? u.can("data.write") : null; })
+      .catch(function () { return null; })
+      .then(function (canWrite) {
+        if (canWrite === false) { notesEl.readOnly = true; notesClear.disabled = true; }
+        connect(db, canWrite); connectNotes(db);
+        if (canWrite === false) noteSay("You can read these notes but not change them: your access to this page is view-only.");
+      });
+  }
+  if (!(window.claude && window.claude.use)) {
+    offline("Not shared: this copy of the page isn't open in claude.ai. Changes here stay in this browser.");
+  } else {
+    say("Connecting to the shared list…");
+    window.claude.use("permissions").then(function (perms) {
+      if (!perms) return "unknown";
+      return perms.state("db").then(function (s) {
+        return s === "prompt" ? perms.request(["db"]).then(function (r) { return r.db; }) : s;
+      });
+    }).catch(function () { return "unknown"; }).then(function (s) {
+      if (s === "denied") {
+        offline("Sharing is switched off for this page in your browser, so ticks and notes stay here. Turn it on to share them.");
+        fixBtn.hidden = false;
+        return;
+      }
+      return window.claude.use("db").then(start);
+    }).catch(function () { start(null); });
+  }
+  fixBtn.addEventListener("click", function () {
+    window.claude.use("permissions").then(function (perms) {
+      if (!perms) throw 0;
+      return perms.manage().then(function () { return perms.state("db"); });
+    }).then(function (s) {
+      if (s === "granted") { fixBtn.hidden = true; window.claude.use("db").then(start); }
+      else say("Sharing is still off. Turn it on from this page's Permissions menu in claude.ai, then reload.");
+    }).catch(function () { say("Open this page's Permissions menu in claude.ai, turn the shared data on, then reload."); });
+  });
+
+  steps.forEach(function (st) {
+    st.querySelector("input[type=checkbox]").addEventListener("change", function (ev) {
+      var id = st.getAttribute("data-id");
+      state.checks[id] = ev.target.checked;
+      save(); refresh(); pushTick(id, ev.target.checked);
+    });
+  });
+
+  // Names typed at the top fill the commands and text below.
+  function applyVars() {
+    document.querySelectorAll("[data-show]").forEach(function (el) {
+      var k = el.getAttribute("data-show");
+      var input = document.querySelector('input[data-var="' + k + '"]');
+      var v = (state.vars[k] || "").trim();
+      el.textContent = v || (input ? input.placeholder : el.textContent);
+    });
+  }
+  document.querySelectorAll("input[data-var]").forEach(function (input) {
+    var k = input.getAttribute("data-var");
+    if (state.vars[k]) input.value = state.vars[k];
+    input.addEventListener("input", function () {
+      state.vars[k] = input.value.replace(/[^A-Za-z0-9._-]/g, "");
+      save(); applyVars();
+    });
+  });
+
+  // Copy buttons copy the command as shown, with the names filled in.
+  document.querySelectorAll(".cmd button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var pre = btn.parentNode.querySelector("pre");
+      var text = pre.textContent;
+      function done(label) { btn.textContent = label; setTimeout(function () { btn.textContent = "Copy"; }, 1600); }
+      function fallback() {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        done("Selected");
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done("Copied"); }, fallback);
+        } else { fallback(); }
+      } catch (e) { fallback(); }
+    });
+  });
+
+  // Clearing the ticks takes a second press, so a stray tap can't wipe them.
+  var reset = document.getElementById("reset"), armed = null;
+  reset.addEventListener("click", function () {
+    if (!armed) {
+      reset.textContent = "Press again to clear"; reset.classList.add("armed");
+      armed = setTimeout(function () { armed = null; reset.textContent = "Clear all ticks"; reset.classList.remove("armed"); }, 4000);
+      return;
+    }
+    clearTimeout(armed); armed = null;
+    state.checks = {}; save(); refresh(); pushAll();
+    reset.textContent = "Cleared"; reset.classList.remove("armed");
+    setTimeout(function () { reset.textContent = "Clear all ticks"; }, 1600);
+  });
+
+  applyVars();
+  refresh();
+})();
+</script>

@@ -58,6 +58,8 @@ for n in NAMES[:12]:
     assert all(0 <= x <= 1.0001 for x in rs), n
 ok("radii are normalised and finite for every family", True)
 ok("no inner layer: one polygon in the still shape", P.portrait_svg("maya", animated=False).count("<polygon") == 1)
+tiles = {re.search(r'<rect width="100" height="100" rx="14" fill="([^"]+)"', P.portrait_svg(n)).group(1) for n in NAMES}
+ok(f"every portrait sits on a white tile ({len(NAMES)} names)", tiles == {"#ffffff"})
 
 # 3. Motion: each temperament differs in path kind and period
 kinds = {t: P.motion(t, 3) for t in P.TEMPERAMENTS}

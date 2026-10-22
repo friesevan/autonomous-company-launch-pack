@@ -4,14 +4,14 @@
 # Run through tests/run.sh, which builds the throwaway copy this works in.
 T="${T:?run tests/run.sh instead}"; R="$T/repo"; cd "$R" || exit 1
 export CLAUDE_BIN="$T/bin/claude" FAKE_ARGS="$T/args.txt" FAKE_COUNT="$T/count.txt" HOME="$T/home"
-export PATH="$T/home/.local/bin:$PATH"
+export PATH="$T/home/.local/bin:$PATH" SECURITY_BIN=false COMPANY_REPO=test/company
 PASS=0; FAIL=0
 ok() { if eval "$2"; then PASS=$((PASS+1)); echo "PASS $1"; else FAIL=$((FAIL+1)); echo "FAIL $1"; fi; }
 G() { python3 tools/governor.py "$@"; }
 dec() { G decide --now "$1" | python3 -c "import json,sys; d=json.load(sys.stdin); print(eval(sys.argv[1]))" "$2"; }
 setu() { python3 -c "import json,sys; u=json.load(open('ops/usage.json')); exec(sys.argv[1]); json.dump(u,open('ops/usage.json','w'))" "$1"; }
 sets() { python3 -c "import json,sys; u=json.load(open('ops/state.json')); exec(sys.argv[1]); json.dump(u,open('ops/state.json','w'))" "$1"; }
-reset() { rm -f ops/usage.json ops/state.json ops/run.json ops/inbox_pending "$FAKE_COUNT"; rm -rf ops/runs; mkdir -p ops/runs log
+reset() { rm -f ops/usage.json ops/state.json ops/run.json ops/inbox_pending ops/ticks.jsonl "$FAKE_COUNT"; rm -rf ops/runs; mkdir -p ops/runs log
   G set-day1 2026-11-01 >/dev/null; G set-budget 140 >/dev/null; printf -- "- [ ] build the thing\n" > ops/board.md; }
 N=2026-11-03T10:00:00-05:00
 
