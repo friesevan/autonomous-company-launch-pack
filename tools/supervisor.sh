@@ -27,9 +27,12 @@ NOW_ARGS=()
 
 # Plan sessions bill the subscription login, never a key in the environment. Auto-updates stay
 # off: a new Claude Code release could change what -p does (Ops Guide, section 3). Commands a
-# session runs never see a credential. A session that can't start still writes a result.
+# session runs never see a credential: none is in the environment (the login and the API-credit key
+# stay in the Keychain, which sessions cannot read). Never set CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: in
+# Claude Code 2.1.307 it turns auto mode off, so sessions start in Manual mode. A session that
+# can't start still writes a result.
 unset CLAUDECODE ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
-export PYTHONDONTWRITEBYTECODE=1 DISABLE_AUTOUPDATER=1 CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 CLAUDE_CODE_STARTUP_FAILURE_RESULTS=1 COMPANY_RUN=1
+export PYTHONDONTWRITEBYTECODE=1 DISABLE_AUTOUPDATER=1 CLAUDE_CODE_STARTUP_FAILURE_RESULTS=1 COMPANY_RUN=1
 
 log() { printf '%s %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG" >&2; }
 j() { printf '%s' "$1" | jq -r "$2" 2>/dev/null; }
