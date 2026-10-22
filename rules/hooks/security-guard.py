@@ -20,7 +20,7 @@ import shlex
 import sys
 
 ROOT = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-HOME = os.environ.get("HOME") or os.path.expanduser("~")
+HOME = os.path.normpath(os.environ.get("HOME") or os.path.expanduser("~"))
 
 # Commands that weaken security, whoever runs them, with sudo or without.
 RULES = [

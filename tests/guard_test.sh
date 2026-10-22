@@ -102,6 +102,8 @@ ok "every sudo command is logged" "grep -q 'installer -pkg' $SUDO_LOG && grep -q
 ok "garbage input: allowed" "[ \$(printf 'xx' | python3 $SG >/dev/null 2>&1; echo \$?) = 0 ]"
 ok "the refusal explains itself" "python3 -c 'import json; print(json.dumps({\"tool_input\": {\"command\": \"sudo fdesetup disable\"}}))' | python3 $SG 2>&1 >/dev/null | grep -q 'turns off FileVault'"
 
+ok "a home path written with // (as macOS's TMPDIR makes) still protects the home files" "[ \$(HOME=\"\$(dirname \"\$HOME\")//home\" guard 'echo x > ~/.claude.json') = 2 ] && [ \$(HOME=\"\$HOME/\" guard 'rm -rf ~') = 2 ]"
+
 echo "== security guard: the supervisor's sessions only"
 for cmd in 'git pull --rebase' 'git -C . merge origin/main' 'cd app && git rebase main'; do
   ok "refuses in a company session: $cmd" "[ \$(COMPANY_RUN=1 guard \"\$cmd\") = 2 ]"
