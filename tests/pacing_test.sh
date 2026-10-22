@@ -28,12 +28,13 @@ ok "first day of the week: no flags yet" "[ \"\$(dec 2026-11-01T15:00:00-05:00 '
 echo "== backlog instead of idle"
 reset; : > ops/board.md; setu 'u["days"]={"2026-11-01":5,"2026-11-02":5}'; sets 'u["last_work_at"]="2026-11-03T09:50:00-05:00"'
 ok "empty board, behind: backlog session" "[ \"\$(dec $N 'd[\"run\"], d[\"backlog\"]')\" = \"('work', True)\" ]"
-sets 'u["last_work_at"]="2026-11-03T10:55:00-05:00"'
-ok "again within 2 hours: skip" "[ \"\$(dec 2026-11-03T11:00:00-05:00 'd[\"run\"]')\" = skip ]"
-sets 'u["last_work_at"]="2026-11-03T12:00:00-05:00"'
-ok "after 2 hours: backlog again" "[ \"\$(dec 2026-11-03T12:05:00-05:00 'd[\"run\"], d[\"backlog\"]')\" = \"('work', True)\" ]"
+sets 'u["last_work_at"]="2026-11-03T10:15:00-05:00"'
+ok "still empty right after a refill: waiting on the Investors, the queue runs" "[ \"\$(dec 2026-11-03T10:20:00-05:00 'd[\"run\"], d[\"code\"]')\" = \"('queue', 'blocked')\" ]"
+ok "after 30 minutes: refill again" "[ \"\$(dec 2026-11-03T10:35:00-05:00 'd[\"run\"], d[\"backlog\"]')\" = \"('work', True)\" ]"
 reset; : > ops/board.md; setu 'u["days"]={"2026-11-01":20,"2026-11-02":20}'; sets 'u["last_work_at"]="2026-11-03T09:50:00-05:00"'
-ok "empty board, on pace: skip" "[ \"\$(dec $N 'd[\"run\"]')\" = skip ]"
+ok "empty board, on pace: refilled too, never idle" "[ \"\$(dec $N 'd[\"run\"], d[\"backlog\"]')\" = \"('work', True)\" ]"
+printf -- '- [b] price test (waiting on #4)\n' > ops/board.md
+ok "a board with only tasks waiting on the Investors counts as empty" "[ \"\$(dec 2026-11-03T11:30:00-05:00 'd[\"backlog\"]')\" = True ]"
 
 echo "== the daily share and the reserve"
 reset; setu 'u["days"]={"2026-11-03":26}'

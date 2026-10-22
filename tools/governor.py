@@ -153,7 +153,7 @@ STATE_DEFAULTS = {
 BILLING_DEFAULTS = {"api_overflow": False, "monthly_credits_usd": 200.0, "reserve_usd": 10.0, "weekly_cap_usd": 50.0,
                     "cycle_day": 1}
 IDLE_MINUTES = 60
-BACKLOG_MINUTES = 120
+BACKLOG_MINUTES = 30   # a refill that leaves the board empty: wait this long before the next
 INBOX_MINUTES = 20
 BEHIND = 0.85
 AUTH_RETRY_MINUTES = 60
@@ -185,6 +185,7 @@ CODE_LABELS = {
     "logged_out": "logged out of Claude Code",
     "share_spent": "with today's share used up",
     "idle": "with nothing on the board",
+    "blocked": "waiting on the Investors, with nothing else on the board",
     "paused": "paused by an Investor",
     "hold": "held for setup",
     "offline": "with the Mac offline or the loop stopped",
@@ -746,17 +747,20 @@ def choose(usage, state, now, pace, base, ready, dry):
     if not work_ok:
         return {**base, "run": "queue", "code": "share_spent", "reason": "today's share of the weekly budget is spent"}
 
-    if tasks == 0 and not inbox and recent:
+    # The company never idles (Tenet 2): an empty board starts a session that refills it. Only when
+    # a refill has just run and still left nothing runnable is it waiting on the Investors, whose
+    # Urgent Requests that session opened; then the no-Claude queue runs until they answer.
+    if tasks == 0 and not inbox:
         last_backlog = state.get("last_backlog_at")
-        if base["upgrade"] and not (last_backlog and now - parse_now(last_backlog) < dt.timedelta(minutes=BACKLOG_MINUTES)):
-            if not dry:
-                state["last_backlog_at"] = now.isoformat()
-                save(STATE, state)
-            return session("work", base, pace, usage, code="backlog", weekly=False, final=False, questions=False,
-                           backlog=True, open_tasks=0, inbox_pending=False,
-                           reason="the board is empty but the week is behind pace: refill it with improvements")
-        return {**base, "run": "skip", "code": "idle",
-                "reason": "nothing to do: no open tasks, no new messages, a session ran recently"}
+        if last_backlog and dt.timedelta(0) <= now - parse_now(last_backlog) < dt.timedelta(minutes=BACKLOG_MINUTES):
+            return {**base, "run": "queue", "code": "blocked",
+                    "reason": "the board is still empty after a refill: waiting on the Investors (their open urgent requests say what for)"}
+        if not dry:
+            state["last_backlog_at"] = now.isoformat()
+            save(STATE, state)
+        return session("work", base, pace, usage, code="backlog", weekly=False, final=False, questions=False,
+                       backlog=True, open_tasks=0, inbox_pending=False,
+                       reason="the board is empty: refill it with the most valuable work (Tenet 2)")
 
     return session("work", base, pace, usage, code="work", weekly=False, final=False, questions=False,
                    open_tasks=tasks, inbox_pending=inbox, inbox_only=False,
