@@ -38,6 +38,7 @@ import html
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -160,7 +161,7 @@ def num(v, default=0.0):
 
 def run(cmd, timeout=60):
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=ROOT).stdout
+        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout, cwd=ROOT).stdout
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -175,15 +176,21 @@ def state_class(share):
     return "hot" if share >= 0.9 else "warm" if share >= 0.7 else "ok"
 
 
-def bar(label, value, maxv, note="", fmt="${:,.2f}", cls=None, show_pct=True):
-    """A labelled progress bar. value/maxv as numbers; note replaces the right-hand text."""
+def bar(label, value, maxv, note="", fmt="${:,.2f}", cls=None, show_pct=True, marks=(), foot=""):
+    """A labelled progress bar. value/maxv as numbers; note replaces the right-hand text.
+
+    marks: (fraction of the track, class, label) for markers drawn across the bar: the plan by now
+    (plan), a cap (cap), a floor (floor), a reserve (reserve). foot: a short line under the bar."""
     share = (value / maxv) if maxv else 0.0
     width = max(0.0, min(1.0, share)) * 100
     cls = cls or state_class(share)
     right = note if note else (f"{fmt.format(value)} of {fmt.format(maxv)}" if maxv else fmt.format(value))
     pct = f" · {share:.0%}" if maxv and note != " " and show_pct else ""
+    ticks = "".join(f'<i class="mark {esc(c)}" style="left:{max(0.0, min(1.0, f)) * 100:.1f}%" title="{esc(t)}"></i>'
+                    for f, c, t in marks if f is not None)
+    under = f'<div class="bar-foot">{foot}</div>' if foot else ""
     return (f'<div class="bar {cls}"><div class="bar-head"><span>{esc(label)}</span><span>{esc(right.strip())}{pct}</span></div>'
-            f'<div class="bar-track"><div class="bar-fill" style="width:{width:.1f}%"></div></div></div>')
+            f'<div class="bar-track"><div class="bar-fill" style="width:{width:.1f}%"></div>{ticks}</div>{under}</div>')
 
 
 def pct_bar(label, used, limit, of_text, extra=""):
@@ -191,6 +198,107 @@ def pct_bar(label, used, limit, of_text, extra=""):
     if not limit:
         return bar(label, 0, 0, note="not calibrated yet", cls="ok")
     return bar(label, used, limit, note=f"{used / limit:.0%} of {of_text}{extra}", show_pct=False)
+
+
+def pbar(label, pct, of_text, marks=(), cls=None, extra="", foot=""):
+    """A bar for a percentage (0 to 100) of a limit, with markers; None when it isn't measured yet."""
+    if pct is None:
+        return bar(label, 0, 0, note="not measured yet", cls="ok")
+    share = num(pct) / 100.0
+    return bar(label, share, 1.0, note=f"{share:.0%} of {of_text}{extra}", show_pct=False, cls=cls, marks=marks, foot=foot)
+
+
+def pace_bar(label, used, pace, of_text="the daily pace"):
+    """Usage against a pace, drawn to 150% so a day over pace still shows; the marker is the pace."""
+    if not pace:
+        return bar(label, 0, 0, note="not calibrated yet", cls="ok")
+    share = used / pace
+    return bar(label, share, 1.5, note=f"{share:.0%} of {of_text}", show_pct=False, cls=state_class(share / 1.1),
+               marks=[(1 / 1.5, "plan", of_text)])
+
+
+PACE_CLASS = {"on pace": "ok", "ahead": "warm", "behind": "behind"}
+HOUR_CODES = [("work", "working"), ("overflow", "on API credits"), ("limit_week", "at the weekly limit"),
+              ("limit_5h", "at the 5-hour limit"), ("logged_out", "logged out"), ("paused", "paused"),
+              ("hold", "held for setup"), ("share_spent", "today's share used"), ("idle", "nothing to do"),
+              ("offline", "no tick: offline or stopped")]
+WORKING = ("work", "report", "inbox", "backlog")
+
+
+def read_ticks():
+    out = []
+    for line in read(os.path.join(ROOT, "ops", "ticks.jsonl")).splitlines() if os.path.exists(os.path.join(ROOT, "ops", "ticks.jsonl")) else []:
+        try:
+            t = json.loads(line)
+            at = dt.datetime.fromisoformat(str(t["at"]).replace("Z", "+00:00")).astimezone(TZ)
+        except (ValueError, KeyError, TypeError):
+            continue
+        code = t.get("code") or t.get("run") or "idle"
+        if code in WORKING:
+            code = "overflow" if t.get("billing") == "api" else "work"
+        out.append((at, code))
+    return out
+
+
+def week_strip(ticks, start, end, now):
+    """The pacing week hour by hour, one row per calendar day: what the run loop was doing."""
+    order = [c for c, _ in HOUR_CODES]
+    labels = dict(HOUR_CODES)
+    buckets = {}
+    for at, code in ticks:
+        if start <= at < end:
+            buckets.setdefault((at.date(), at.hour), set()).add(code)
+    head = '<div class="wrow head"><span></span>' + "".join(
+        f"<span>{h if h % 6 == 0 else ''}</span>" for h in range(24)) + "</div>"
+    rows, day = [head], start.date()
+    while day <= min(end.date(), now.date()) and len(rows) <= 8:
+        cells = []
+        for h in range(24):
+            c0 = dt.datetime.combine(day, dt.time(h, 0), TZ)
+            c1 = c0 + dt.timedelta(hours=1)
+            if c1 <= start or c0 >= end:
+                cells.append('<i class="h out"></i>')
+            elif c0 > now:
+                cells.append('<i class="h future"></i>')
+            else:
+                codes = buckets.get((day, h), set())
+                code = next((c for c in order if c in codes), "offline")
+                cells.append(f'<i class="h c-{code}" title="{c0:%a} {h}:00 · {esc(labels[code])}"></i>')
+        rows.append(f'<div class="wrow"><span>{day:%a}</span>{"".join(cells)}</div>')
+        day += dt.timedelta(days=1)
+    return '<div class="week-strip" role="img" aria-label="This week, hour by hour">' + "".join(rows) + "</div>"
+
+
+def hours_legend(hours):
+    """The legend for the week strip, with the hours spent in each state."""
+    labels = dict(HOUR_CODES)
+    folded = {}
+    for code, h in hours.items():
+        key = ("overflow" if code == "overflow" else "work") if code in WORKING + ("overflow",) else code
+        folded[key] = folded.get(key, 0.0) + num(h)
+    parts = [f'<span><i class="h c-{c}"></i>{esc(labels[c])} {round(folded[c] * 2) / 2:g} h</span>'
+             for c, _ in HOUR_CODES if folded.get(c)]
+    return f'<div class="legend hours">{"".join(parts)}</div>' if parts else ""
+
+
+def xesc(s):
+    return html.escape(str(s), quote=True)
+
+
+def atom(site_url, base, path, title, author, entries):
+    """An Atom feed with absolute links, for feed readers (Commandment 46: the site is public)."""
+    self_url = site_url + base + path
+    updated = entries[0]["updated"] if entries else dt.datetime.now(TZ).isoformat(timespec="seconds")
+    out = ['<?xml version="1.0" encoding="utf-8"?>', '<feed xmlns="http://www.w3.org/2005/Atom">',
+           f"<title>{xesc(title)}</title>", f'<link href="{xesc(self_url)}" rel="self"/>',
+           f'<link href="{xesc(site_url + base + "/")}"/>', f"<id>{xesc(self_url)}</id>",
+           f"<updated>{updated}</updated>", f"<author><name>{xesc(author)}</name></author>"]
+    for e in entries:
+        out += ["<entry>", f"<title>{xesc(e['title'])}</title>", f'<link href="{xesc(e["url"])}"/>',
+                f"<id>{xesc(e['id'])}</id>", f"<updated>{e['updated']}</updated>",
+                f'<summary type="text">{xesc(e["summary"])}</summary>', "</entry>"]
+    out.append("</feed>")
+    return "\n".join(out) + "\n"
 
 
 def mood_chip(level, word=None, reason=None, big=False):
@@ -615,9 +723,10 @@ def load_usage():
 
 def load_requests(cfg, use_gh):
     repo = cfg.get("company_repo")
-    if not (repo and use_gh and shutil.which("gh")):
+    gh = shlex.split(os.environ.get("GH_CMD") or "gh")  # GH_CMD overrides gh, as in tools/inbox.py
+    if not (repo and use_gh and shutil.which(gh[0])):
         return None
-    out = run(["gh", "issue", "list", "--repo", repo, "--state", "open", "--limit", "100",
+    out = run([*gh, "issue", "list", "--repo", repo, "--state", "open", "--limit", "100",
                "--json", "number,title,labels,createdAt,url,comments"])
     try:
         issues = json.loads(out)
@@ -649,6 +758,8 @@ LAYOUT = """<!DOCTYPE html>
 <meta property="og:title" content="{% if page.title %}{{ page.title }} · {% endif %}{{ site.title }}">
 <meta property="og:description" content="{{ page.description | default: site.description }}">
 {% feed_meta %}
+{% if site.extra_feeds %}<link rel="alternate" type="application/atom+xml" title="{{ site.title }}: product updates" href="{{ '/feed/updates.xml' | absolute_url }}">
+<link rel="alternate" type="application/atom+xml" title="{{ site.title }}: records" href="{{ '/feed/records.xml' | absolute_url }}">{% endif %}
 <style>
 :root{--ink:#1b1b1b;--muted:#5f5f5f;--line:#e4e4e4;--bg:#fff;--accent:#2b5bd7;--soft:#f4f5f8;--ok:#2f9e5b;--warm:#d9a21b;--hot:#d9442b;--pink:#c04fb0;--seg:#fff;--portrait:#fff;--blue-bg:#dfe7ff;--blue-fg:#1d3d99;--amber-bg:#fbe3a6;--amber-fg:#4a3200;--green-bg:#d3f0de;--green-fg:#0f4a2a;--pink-bg:#f7d9f0;--pink-fg:#6a1f5e;--grey-bg:#e9eaee;--grey-fg:#3d3f46}
 @media (prefers-color-scheme:dark){:root{--ink:#ececec;--muted:#a8a8a8;--line:#333;--bg:#111;--accent:#8ab0ff;--soft:#1b1b1b;--ok:#4fc27a;--warm:#e6b94a;--hot:#ef6a52;--pink:#e07bd2;--seg:#2c2f36;--blue-bg:#1d2b4f;--blue-fg:#c3d3ff;--amber-bg:#4a3a12;--amber-fg:#ffe0a0;--green-bg:#163a26;--green-fg:#a6e6c0;--pink-bg:#44203e;--pink-fg:#f5c2ea;--grey-bg:#2a2b30;--grey-fg:#c9cad0}}
@@ -676,7 +787,17 @@ h1{font-size:34px;letter-spacing:-.02em;margin:18px 0 8px;text-wrap:balance}h2{f
 .tile .bar{margin:6px 0 0}.tile .bar-head{display:none}
 .bar{margin:10px 0}.bar-head{display:flex;justify-content:space-between;font-size:14px;color:var(--muted);margin-bottom:4px}.bar-head span:first-child{color:var(--ink)}
 .bar-track{height:10px;background:var(--line);border-radius:6px;overflow:hidden}.bar-fill{height:100%;background:var(--ok);border-radius:6px;transition:width .4s}
-.bar.warm .bar-fill{background:var(--warm)}.bar.hot .bar-fill{background:var(--hot)}.bar.money .bar-fill{background:var(--accent)}
+.bar.warm .bar-fill{background:var(--warm)}.bar.hot .bar-fill{background:var(--hot)}.bar.money .bar-fill{background:var(--accent)}.bar.behind .bar-fill{background:var(--accent)}
+.bar-track{position:relative}.mark{position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;background:var(--ink);opacity:.85;border-radius:1px}
+.mark.cap{background:var(--hot)}.mark.reserve{background:var(--muted);opacity:.7}.bar-foot{font-size:13px;color:var(--muted);margin-top:3px}
+.status-line{margin:2px 0 8px;font-size:17px}.status-line span{color:var(--muted);font-size:14px}.status-line.behind b{color:var(--accent)}.status-line.ahead b{color:var(--warm)}.status-line.ok b{color:var(--ok)}
+.week-strip{display:grid;gap:3px;margin:10px 0 6px}.wrow{display:grid;grid-template-columns:38px repeat(24,minmax(0,1fr));gap:2px;align-items:center}
+.wrow span{font-size:12px;color:var(--muted)}.wrow.head span{font-size:10px;white-space:nowrap;overflow:visible}
+.bar-head{gap:10px}.bar-head span:first-child{white-space:nowrap}.bar-head span:last-child{text-align:right}.h{display:block;height:14px;border-radius:2px;background:var(--line)}
+.h.c-work{background:var(--ok)}.h.c-overflow{background:var(--accent)}.h.c-limit_week,.h.c-limit_5h{background:var(--hot)}.h.c-share_spent{background:var(--warm)}
+.h.c-idle{background:var(--grey-bg);box-shadow:inset 0 0 0 1px var(--line)}.h.c-paused,.h.c-hold{background:var(--pink)}.h.c-logged_out{background:var(--blue-fg)}
+.h.c-offline{background:transparent;box-shadow:inset 0 0 0 1px var(--muted);opacity:.5}.h.future,.h.out{background:transparent}
+.legend.hours .h{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:middle}
 .pipe{list-style:none;display:flex;padding:0;margin:8px 0 12px;position:relative}.pipe li{flex:1;position:relative;text-align:center;font-size:13.5px;color:var(--muted);padding-top:20px}
 .pipe li .dot{position:absolute;top:0;left:50%;transform:translateX(-50%);width:14px;height:14px;border-radius:50%;background:var(--line);box-shadow:0 0 0 2px var(--soft)}
 .pipe li::before{content:"";position:absolute;top:6px;left:-50%;width:100%;height:2px;background:var(--line)}.pipe li:first-child::before{display:none}
@@ -763,7 +884,7 @@ details{margin:12px 0}summary{cursor:pointer}footer{padding:28px 18px 44px;color
 <main>
 {{ content }}
 </main>
-<footer>{{ site.title }} · <a href="{{ '/privacy.html' | relative_url }}">Privacy</a> · <a href="{{ '/support.html' | relative_url }}">Support</a> · <a href="{{ '/press.html' | relative_url }}">Press kit</a> · <a href="{{ '/feed.xml' | relative_url }}">RSS</a></footer>
+<footer>{{ site.title }} · <a href="{{ '/privacy.html' | relative_url }}">Privacy</a> · <a href="{{ '/support.html' | relative_url }}">Support</a> · <a href="{{ '/press.html' | relative_url }}">Press kit</a> · <a href="{{ '/subscribe.html' | relative_url }}">Subscribe (RSS)</a></footer>
 </body>
 </html>
 """
@@ -859,7 +980,8 @@ def build(out, use_gh=True):
         f"announcement: {json.dumps(str(investor.get('announcement') or ''))}",
         f"disclosure: {json.dumps(cfg['disclosure'])}",
         "plugins: [jekyll-feed]",
-        "feed: {path: feed.xml}",
+        "feed: {path: feed.xml, posts_limit: 50}",
+        f"extra_feeds: {'true' if site_url else 'false'}",
         "markdown: kramdown",
         "future: true",
         "exclude: [README.md]",
@@ -986,7 +1108,7 @@ def build(out, use_gh=True):
         strip = ['<div class="strip">',
                  f'<div class="row"><span class="tag">Day {rday} of {days_total}</span>{day_track(rday, days_total, launched_day)}</div>',
                  f'<div class="row">{bar("Net proceeds", rev, goal, cls="money")}</div>',
-                 f'<div class="row">{pct_bar("Claude usage that day", used, weekly_budget / 7, "the daily pace")}</div>',
+                 f'<div class="row">{pace_bar("Claude usage that day", used, weekly_budget / 7)}</div>',
                  "</div>"]
         # This period: events, people, moods, and usage since the previous report
         # A report's window runs from the previous report to this one, each shifted by a grace
@@ -1280,37 +1402,124 @@ def build(out, use_gh=True):
     site.write(os.path.join("log", "index.md"), "\n".join(log) + "\n")
     site.write(os.path.join("log", "events.json"), json.dumps(events, indent=0) + "\n")
 
-    # Usage
-    pace = usage.get("pacing") or {}
-    five_used, five_budget = num(usage.get("window_5h_usd")), usage.get("five_hour_budget_usd")
+    # Usage. Every percentage is a bar. Markers show the plan by now, the caps, the 90% floor, and
+    # the reserve; the status line and its reasons say whether the week is ahead or behind, and why.
     caps = {k: num(v) for k, v in (usage.get("caps") or {}).items()}
     shares = usage.get("shares_7d") or {}
+    plan = usage.get("plan") or {}
+    wk, td = plan.get("week") or {}, plan.get("today") or {}
+    five, fab = plan.get("five_hour") or {}, plan.get("fable") or {}
+
+    def reset_text(iso, with_day=True):
+        try:
+            t = dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00")).astimezone(TZ)
+        except (ValueError, TypeError):
+            return ""
+        return (f"{t:%a} " if with_day else "") + f"{int(t.strftime('%I'))}:{t:%M %p}"
+
     up = [fm({"layout": "default", "title": "Usage", "section": "usage"}), "# Claude usage", "",
           '<p class="lead">One Claude Max 20x subscription runs the company, and it never buys extra usage. The plan meters a rolling '
           "5-hour window, a weekly window, and a weekly Fable allowance; each bar shows how much of that limit is used. "
-          "The company aims to use the whole weekly allowance by each reset, never early (Tenet 7).</p>", ""]
-    if usage:
+          "The company aims to use the whole weekly allowance by each reset, never early (Tenet 7), and a marker on each bar shows "
+          "the plan by now.</p>", ""]
+    if usage and wk:
+        status = wk.get("status") or "on pace"
+        delta = num(wk.get("delta_pts"))
+        verdict = ("On pace for the week" if status == "on pace" else
+                   f"{abs(delta):.0f} points {'behind' if status == 'behind' else 'ahead of'} the week's even pace")
+        if plan.get("source") == "meter":
+            src = "the plan's own meter" + (f", read {reset_text(plan.get('meter_at'))}" if plan.get("meter_at") else "")
+        else:
+            src = "the governor's estimate, until the plan's meter is read"
+        wplan, tplan = num(wk.get("plan_pct")), num(td.get("plan_pct"))
+        five_extra = f" · resets {reset_text(five.get('resets_at'), False)}" if five.get("resets_at") else ""
         up += ['<div class="panel">',
-               pct_bar("Last 5 hours", five_used, num(five_budget), "the 5-hour limit"),
-               pct_bar("Today", num(pace.get("today_used_usd")), num(pace.get("today_share_usd")), "the daily pace"),
-               pct_bar("This week", num(pace.get("used_week_usd")), num(pace.get("budget_usd")), "the weekly limit"),
-               pct_bar("Fable this week", num(usage.get("fable_week_usd")), num(usage.get("fable_allowance_usd")), "its weekly allowance"),
+               f'<p class="status-line {PACE_CLASS.get(status, "ok")}"><b>{esc(verdict)}.</b> <span>Source: {esc(src)}.</span></p>',
+               pbar("This week", wk.get("actual_pct"), "the weekly limit", cls=PACE_CLASS.get(status, "ok"),
+                    marks=[(wplan / 100, "plan", f"plan by now: {wplan:.0f}%")],
+                    extra=f" · resets {reset_text(wk.get('resets_at'))}" if wk.get("resets_at") else "",
+                    foot=f"Plan by now: {wplan:.0f}% of the week, the marker."),
+               pbar("Today", td.get("actual_pct"), "today's share", cls=PACE_CLASS.get(td.get("status"), "ok"),
+                    marks=[(tplan / 100, "plan", f"plan by now: {tplan:.0f}%"),
+                           (num(td.get("reserve_pct"), 90) / 100, "reserve", "the evening report's reserve")],
+                    foot=f"Plan by now: {tplan:.0f}% of today's share. The grey marker holds back a reserve for the evening "
+                         "report; it is released once the report is done."),
+               pbar("Last 5 hours", five.get("actual_pct") if five else None, "the 5-hour limit", extra=five_extra),
+               pbar("Fable this week", fab.get("actual_pct") if fab else None, "its weekly allowance",
+                    foot="A ceiling, not a target: Fable shares the weekly limit, so it is used as the work needs."),
                "</div>", ""]
-        up += ["## Last 7 days, by category", ""]
+        if plan.get("reasons"):
+            up += ["## Why", ""] + [f"- {esc(r)}" for r in plan["reasons"]] + [""]
+        if plan.get("credits_on"):
+            up += ['<p class="notice">Usage credits are switched on in the plan, so a limit would bill real money. '
+                   "The Investors have been alerted.</p>", ""]
+        start_t = dt.datetime.fromisoformat((usage.get("pacing") or {}).get("week_start")) if (usage.get("pacing") or {}).get("week_start") else None
+        end_t = dt.datetime.fromisoformat((usage.get("pacing") or {}).get("week_end")) if (usage.get("pacing") or {}).get("week_end") else None
+        ticks = read_ticks()
+        if start_t and end_t and ticks:
+            up += ["## This week, hour by hour", "",
+                   "What the run loop was doing in each hour of the pacing week.", "",
+                   week_strip(ticks, start_t.astimezone(TZ), end_t.astimezone(TZ), dt.datetime.now(TZ)),
+                   hours_legend(plan.get("hours") or {}), ""]
+    if usage:
+        up += ["## Where the usage went, last 7 days", ""]
         if any(num(v) > 0 for v in shares.values()):
             up += [stacked(shares, caps), ""]
-        up += ["| Category | Share | Cap |", "| --- | --- | --- |"]
         for c, label in CATEGORY_LABELS:
-            cap = f"{caps[c] * 100:.0f}%" if c in caps else "at least 90%"
-            up.append(f"| {c} | {num(shares.get(c)):.1%} | {cap} |")
+            v = num(shares.get(c))
+            if c == "project":
+                up.append(bar(label.capitalize(), v, 1.0, note=f"{v:.1%} of all usage", show_pct=False,
+                              cls="ok" if v >= 0.9 or not any(shares.values()) else "warm",
+                              marks=[(0.9, "floor", "at least 90%")], foot="At least 90% goes to the product: the marker."))
+            elif caps.get(c):
+                cap = caps[c]
+                up.append(bar(label.capitalize(), v, cap, note=f"{v:.1%} of all usage · {v / cap:.0%} of its {cap:.0%} cap",
+                              show_pct=False, cls="hot" if v > cap else "warm" if v > 0.8 * cap else "ok"))
         up.append("")
+        kinds = {k: num(v) for k, v in (usage.get("kinds_7d") or {}).items() if num(v) > 0}
+        if kinds:
+            up += ["## Product work by kind, last 7 days", "",
+                   "Each worker call names its kind of work; the Operator's own turns count as operations.", ""]
+            for k, v in sorted(kinds.items(), key=lambda kv: -kv[1]):
+                up.append(bar(k.capitalize(), v, 1.0, note=f"{v:.0%} of product work", show_pct=False, cls="ok"))
+            up.append("")
+        week_models = {k: num(v) for k, v in (usage.get("week_models") or {}).items() if num(v) > 0}
+        total_models = sum(week_models.values())
+        if total_models:
+            up += ["## Models this week", ""]
+            for k in ("fable", "opus", "sonnet", "haiku"):
+                if week_models.get(k):
+                    up.append(bar(k.capitalize(), week_models[k] / total_models, 1.0,
+                                  note=f"{week_models[k] / total_models:.0%} of this week's usage", show_pct=False, cls="ok"))
+            up.append("")
+        api = usage.get("api") or {}
+        if api.get("enabled") or num(api.get("month_usd")) > 0:
+            stop = 1 - num(api.get("reserve_pct")) / 100
+            state_txt = "ready, used only while a plan limit pauses work" if api.get("ok") else \
+                "off: " + "; ".join(api.get("blocked") or [])
+            up += ["## API credits", "",
+                   "The plan includes API credits each month. The company uses them only as overflow while a plan limit has "
+                   "paused work, never for Fable, and never past the Investors' caps.", "",
+                   bar("This cycle", num(api.get("month_pct")) / 100, 1.0, note=f"{num(api.get('month_pct')) / 100:.0%} of the included credits",
+                       show_pct=False, cls="hot" if num(api.get("month_pct")) / 100 >= stop else "ok",
+                       marks=[(stop, "cap", "the reserve: overflow stops here")]),
+                   bar("This week", num(api.get("week_pct")) / 100, 1.0, note=f"{num(api.get('week_pct')) / 100:.0%} of the weekly overflow cap",
+                       show_pct=False, cls="ok"),
+                   f'<div class="bar-foot">Overflow is {esc(state_txt)}.</div>', ""]
         if usage.get("weeks"):
             up += ["## Past weeks", ""]
-            for wk in usage["weeks"][-8:]:
-                hit = " · limit hit" if wk.get("weekly_limit_hit") else ""
-                up.append(pct_bar(f"Week of {wk['start'][:10]}", num(wk["spent_usd"]), num(wk["budget_usd"]), "the weekly limit", hit))
+            for w in usage["weeks"][-8:]:
+                hit = " · limit hit" if w.get("weekly_limit_hit") else ""
+                up.append(pct_bar(f"Week of {w['start'][:10]}", num(w["spent_usd"]), num(w["budget_usd"]), "the weekly limit", hit))
             up.append("")
-    up += ["## The figures", "", usage_block or "No usage recorded yet.", ""]
+        table = ["| Category | Share | Cap |", "| --- | --- | --- |"]
+        for c, label in CATEGORY_LABELS:
+            cap = f"{caps[c] * 100:.0f}%" if c in caps else "at least 90%"
+            table.append(f"| {c} | {num(shares.get(c)):.1%} | {cap} |")
+        up += ["## The figures", "", '<details markdown="1"><summary>The exact figures</summary>', "",
+               usage_block or "No usage recorded yet.", "", *table, "", "</details>", ""]
+    else:
+        up += ["No usage recorded yet.", ""]
     site.write("usage.md", "\n".join(up))
 
     # Requests
@@ -1330,13 +1539,60 @@ def build(out, use_gh=True):
                "acknowledges it, and acts on it (Commandment 57).", ""]
     site.write("requests.md", "\n".join(rq) + "\n")
 
+    # Feeds. Reports come through jekyll-feed (feed.xml); product updates and the records are Atom
+    # feeds written here, with absolute links from site.json's url (no url, no feeds). No Claude.
+    base = parsed.path.rstrip("/")
+    feed_links = []
+    if site_url:
+        host = parsed.netloc or "site"
+        update_types = set(MILESTONE_TYPES) | {"test", "outage", "milestone", "pivot"}
+        entries = []
+        for e in events:
+            etype = str(e.get("type", "")).lower()
+            t = event_time(e)
+            if etype not in update_types or not t:
+                continue
+            link = e.get("link") if str(e.get("link", "")).startswith("http") else site_url + base + "/log/"
+            stamp = t.replace(tzinfo=TZ).isoformat(timespec="seconds")
+            entries.append({"title": f"{etype.capitalize()}: {str(e.get('summary', ''))[:90]}", "url": link,
+                            "id": f"tag:{host},{t:%Y-%m-%d}:event/{slugify(stamp + '-' + etype + '-' + str(e.get('summary', ''))[:40])}",
+                            "updated": stamp, "summary": str(e.get("summary", ""))})
+        site.write(os.path.join("feed", "updates.xml"),
+                   atom(site_url, base, "/feed/updates.xml", f"{cfg['name']}: product updates", cfg["name"], entries[:50]))
+        entries = []
+        for s in story:
+            t = when_time(s.get("when", ""))
+            if not t:
+                continue
+            stamp = t.replace(tzinfo=TZ).isoformat(timespec="seconds")
+            entries.append({"title": f"{str(s.get('kind', 'record')).capitalize()}: {s.get('title', '')}",
+                            "url": site_url + base + "/story/" + s["path"] + ".html",
+                            "id": f"tag:{host},{t:%Y-%m-%d}:record/{s['path']}", "updated": stamp,
+                            "summary": excerpt(s.get("body", ""), 300)})
+        site.write(os.path.join("feed", "records.xml"),
+                   atom(site_url, base, "/feed/records.xml", f"{cfg['name']}: records", cfg["name"], entries[:50]))
+        feed_links = [("Reports", "The CEO's reports, twice a day", site_url + base + "/feed.xml"),
+                      ("Product updates", "Builds, tests, releases, sales, decisions, hires, and outages", site_url + base + "/feed/updates.xml"),
+                      ("Records", "Diaries, conversations, meetings, hiring rounds, and testimonies", site_url + base + "/feed/records.xml")]
+    if feed_links:
+        subscribe = ["# Subscribe", "",
+                     "Three feeds follow the company. Paste an address into any feed reader. The site rebuilds from the "
+                     "company's records about every 15 minutes, so a new item reaches a feed within about 15 minutes.", "",
+                     "| Feed | What it carries | Address |", "| --- | --- | --- |"]
+        subscribe += [f"| {name} | {what} | <{url}> |" for name, what, url in feed_links]
+        subscribe += ["", "**Notifications.** A feed reader checks feeds on its own schedule, so an alert can come anywhere from a few "
+                      "minutes to an hour or two after an update. Many readers can notify you of new items in the feeds you choose.", ""]
+    else:
+        subscribe = ["# Subscribe", "", "Feeds are published once the site has its address.", ""]
+
     # Pages the company writes: about, privacy, support, press, under the About tab with their own tabs
-    pages = {"about": "About", "privacy": "Privacy policy", "support": "Support", "press": "Press kit"}
-    short = {"about": "About", "privacy": "Privacy", "support": "Support", "press": "Press kit"}
+    pages = {"about": "About", "privacy": "Privacy policy", "support": "Support", "press": "Press kit", "subscribe": "Subscribe"}
+    short = {"about": "About", "privacy": "Privacy", "support": "Support", "press": "Press kit", "subscribe": "Subscribe"}
     defaults = {"about": f"# About\n\n{cfg['tagline']}\n\n{cfg['disclosure']}\n",
                 "privacy": "# Privacy policy\n\nTo be written before launch.\n",
                 "support": "# Support\n\nSupport details are posted here before launch.\n",
-                "press": "# Press kit\n\nThe press kit is published here at launch.\n"}
+                "press": "# Press kit\n\nThe press kit is published here at launch.\n",
+                "subscribe": "\n".join(subscribe) + "\n"}
     sources = {}
     for key in pages:
         src = os.path.join(ROOT, "site", "pages", f"{key}.md")

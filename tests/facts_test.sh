@@ -20,7 +20,11 @@ cat > log/events.jsonl <<'EOF'
 {"time": "2026-11-04T01:00:00-05:00", "worker": "operator", "type": "message", "summary": "Investor asked for a TestFlight build", "link": ""}
 {"time": "2026-11-04T02:00:00-05:00", "worker": "operator", "type": "report", "summary": "Report 6 published", "link": ""}
 EOF
+# A base commit dated before the window, so "finished since the last report" never depends on today's date.
+GIT_AUTHOR_DATE=2026-11-01T00:00:00-05:00 GIT_COMMITTER_DATE=2026-11-01T00:00:00-05:00 \
+  git -c user.name=Operator -c user.email=x@example.com commit -q --allow-empty -m "ops: base"
 printf -- '- [ ] Ship the onboarding\n- [ ] Write the privacy policy\n' > ops/board.md
+printf '{"firewall": "on", "filevault": "off", "sip": "on", "gatekeeper": "on", "security_updates": "on"}\n' > ops/posture.json
 git add -A && commit_at 2026-11-03T20:00:00-05:00 Operator "ops: evening run"
 printf -- '- [x] Ship the onboarding\n- [ ] Write the privacy policy\n' > ops/board.md
 git add -A && commit_at 2026-11-03T23:00:00-05:00 Maya "Onboarding screens done"
@@ -37,9 +41,13 @@ ok "commits by workers, not the Operator" "grep -q 'Maya: Onboarding screens don
 ok "tasks finished since the last report, and what is open" "grep -q 'Finished since the last report (1): Ship the onboarding' $F && grep -q 'Open (1): Write the privacy policy' $F"
 ok "usage in percent, no dollars" "awk '/^## Usage/{f=1;next} /^## /{f=0} f' $F | grep -q 'of the weekly limit' && ! awk '/^## Usage/{f=1;next} /^## /{f=0} f' $F | grep -q '[\$]'"
 ok "no week sections on an ordinary evening" "! grep -q '^## The week in usage' $F"
+ok "safety: a protection that isn't on is listed" "awk '/^## Safety/{f=1;next} /^## /{f=0} f' $F | grep -q 'filevault: off'"
+ok "an offset without a colon is read (-0500)" "printf '2026-11-03T18:00:00-0500\n' > reports/last_report.txt && python3 tools/report_facts.py --kind evening --now 2026-11-04T06:00:00-05:00 >/dev/null && grep -q 'Clean build on the Simulator' $F"
+printf '2026-11-03T18:00:00-05:00\n' > reports/last_report.txt
 
 echo "== weekly facts"
 ok "weekly adds the week's usage against the caps and the optimizations" "python3 tools/report_facts.py --kind weekly --now 2026-11-07T18:30:00-05:00 >/dev/null && grep -q '^## The week in usage' $F && grep -q '^## Optimizations' $F"
+ok "weekly usage has the plan by now and why" "awk '/^## The week in usage/{f=1;next} /^## /{f=0} f' $F | grep -q 'Plan by now'"
 
 echo "== no previous report"
 rm -f reports/last_report.txt

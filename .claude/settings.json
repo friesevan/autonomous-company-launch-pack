@@ -37,29 +37,63 @@
       "WebFetch(domain:code.claude.com)"
     ],
     "deny": [
-      "Bash(sudo *)",
       "Bash(git push --force *)",
       "Bash(git push -f *)",
       "Bash(git push * --force)",
       "Bash(git push * -f)",
+      "Bash(security find-generic-password *)",
+      "Bash(security find-internet-password *)",
+      "Bash(security dump-keychain *)",
       "Edit(CLAUDE.md)",
       "Edit(setup/**)",
       "Edit(rules/**)",
       "Edit(investors/**)",
+      "Edit(.github/**)",
+      "Edit(CLAUDE.local.md)",
+      "Edit(.mcp.json)",
       "Edit(.claude/settings.json)",
+      "Edit(.claude/settings.local.json)",
+      "Edit(.claude/CLAUDE.md)",
+      "Edit(.claude/agents/**)",
+      "Edit(.claude/commands/**)",
+      "Edit(.claude/rules/**)",
+      "Edit(.claude/hooks/**)",
+      "Edit(.claude/output-styles/**)",
+      "Edit(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Edit(~/.claude.json)",
       "Read(~/.ssh/**)",
       "Read(~/.appstoreconnect/private_keys/**)",
       "Read(ops/secrets.local)"
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/rules/hooks/session-canary.sh\""
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/rules/hooks/protect-records.sh"
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/rules/hooks/protect-records.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Monitor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/rules/hooks/security-guard.py\""
           }
         ]
       },
@@ -68,7 +102,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/rules/hooks/model-guard.py"
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/rules/hooks/model-guard.py\""
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "matcher": "user_settings|project_settings|local_settings",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/rules/hooks/config-guard.py\""
           }
         ]
       }
@@ -76,6 +121,7 @@
   },
   "env": {
     "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "3",
-    "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "1"
+    "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "1",
+    "DISABLE_AUTOUPDATER": "1"
   }
 }

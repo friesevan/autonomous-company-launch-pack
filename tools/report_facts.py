@@ -18,6 +18,8 @@ import datetime as dt
 import glob
 import json
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -50,13 +52,17 @@ def load_json(rel):
 
 def sh(cmd, timeout=60):
     try:
-        return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=timeout).stdout
+        return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout).stdout
     except (OSError, subprocess.SubprocessError):
         return ""
 
 
 def parse_time(s):
-    d = dt.datetime.fromisoformat(str(s).strip().replace("Z", "+00:00"))
+    """ISO 8601 as Python 3.9 reads it: also accepts Z, -0400-style offsets, and any fraction digits."""
+    text = str(s).strip().replace("Z", "+00:00")
+    text = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", text)
+    text = re.sub(r"\.(\d+)", lambda m: "." + (m.group(1) + "000000")[:6], text, count=1)
+    d = dt.datetime.fromisoformat(text)
     return d if d.tzinfo else d.replace(tzinfo=TZ)
 
 
@@ -167,8 +173,9 @@ def main(argv=None):
         ledger += [f"{os.path.basename(p)}: " + r for r in rows[-8:]]
     out += section("Ledger (latest lines)", ledger, "No ledger yet.")
 
-    if shutil.which("gh"):
-        raw = sh(["gh", "issue", "list", "--state", "open", "--limit", "30", "--json", "number,title,labels"])
+    gh = shlex.split(os.environ.get("GH_CMD") or "gh")  # GH_CMD overrides gh, as in tools/inbox.py
+    if shutil.which(gh[0]):
+        raw = sh([*gh, "issue", "list", "--state", "open", "--limit", "30", "--json", "number,title,labels"])
         try:
             issues = json.loads(raw or "[]")
         except json.JSONDecodeError:
@@ -180,12 +187,38 @@ def main(argv=None):
                 keep.append(f"- #{i.get('number')} [{', '.join(sorted(labels))}] {i.get('title', '')}")
         out += section("Open requests to the Investors", keep)
 
+    safety = []
+    for name, value in sorted(load_json("ops/posture.json").items()):
+        if isinstance(value, str) and value != "on":
+            safety.append(f"- Security setting {name}: {value} (ops/posture.json)")
+    for mark in sorted(glob.glob(path("ops", ".alerted_*"))):
+        try:
+            when = dt.datetime.fromtimestamp(os.path.getmtime(mark), TZ)
+        except OSError:
+            continue
+        if start < when <= now:
+            safety.append(f"- Emergency sent {when:%a %H:%M}: {os.path.basename(mark)[len('.alerted_'):]}")
+    for line in read("ops/runs/supervisor.log").splitlines()[-3000:]:
+        if "file guard:" in line or "removed a stale lock" in line or "stopped" in line and "session ran past" in line:
+            try:
+                when = dt.datetime.strptime(line[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ)
+            except ValueError:
+                continue
+            if start < when <= now:
+                safety.append(f"- {when:%a %H:%M} {line[20:].strip()}")
+    if os.path.exists(path("ops", "paused")):
+        safety.append(f"- The company is paused: {read('ops/paused').strip()}")
+    out += section("Safety and outages (emergencies, restored files, settings; outages are in the events)", safety)
+
     if args.kind in ("weekly", "final"):
         status = sh([sys.executable, "-I", path("tools", "governor.py"), "status", "--json", "--now", now.isoformat()])
         try:
             st = json.loads(status or "{}")
         except json.JSONDecodeError:
             st = {}
+        plan = (st.get("plan") or {}).get("week") or {}
+        kinds = st.get("kinds_7d") or {}
+        api = st.get("api") or {}
         caps = st.get("caps") or {}
         shares = st.get("shares_7d") or {}
         pace = st.get("pacing") or {}
@@ -195,6 +228,13 @@ def main(argv=None):
             week.append(f"- This week so far: {float(pace.get('used_week_usd', 0)) / float(pace['budget_usd']):.0%} of the weekly limit")
         if st.get("fable_allowance_usd"):
             week.append(f"- Fable this week: {float(st.get('fable_week_usd', 0)) / float(st['fable_allowance_usd']):.0%} of its allowance")
+        if plan:
+            week.append(f"- Plan by now: {float(plan.get('plan_pct', 0)):.0f}% of the week; used {float(plan.get('actual_pct', 0)):.0f}% "
+                        f"({plan.get('status', '?')}); why: " + (" ".join((st.get("plan") or {}).get("reasons") or []) or "nothing unusual"))
+        if any(kinds.values()):
+            week.append("- Product work by kind: " + ", ".join(f"{k} {float(v):.0%}" for k, v in sorted(kinds.items(), key=lambda kv: -kv[1]) if v))
+        if api.get("month_usd"):
+            week.append(f"- API credits this cycle: {float(api.get('month_pct', 0)):.0f}% of the included credits, as overflow")
         out += section("The week in usage", week, "Not recorded yet.")
         opt = [l for l in read("log/optimizations.md").splitlines() if l.strip()]
         out += section("Optimizations (log/optimizations.md, latest lines)", opt[-25:], "None logged.")

@@ -12,11 +12,14 @@ Persona file format:
     description: Maya, iOS engineer. Use for Swift and SwiftUI work.
     maxTurns: 40
     effort: medium
+    tools: Read, Grep, Glob, Bash
     ---
     # Maya
     <persona, career goal, current goals...>
 
-Only `description` is required. Files in personnel/agents/former/ are skipped,
+Only `description` is required. `tools` and `disallowedTools` are comma-separated
+lists (brackets optional); Claude Code needs them as JSON arrays, so they are
+written as arrays. Files in personnel/agents/former/ are skipped,
 except with --include-former, which the supervisor passes on Day 30 so former
 workers can write their Final Report testimonies.
 The output is written only when it changes, so the prompt cache stays warm.
@@ -39,6 +42,7 @@ AMENDMENTS = os.path.join(ROOT, "amendments.md")
 OUT = os.path.join(ROOT, "ops", "agents.json")
 
 ALLOWED_KEYS = {"description", "maxTurns", "effort", "tools", "disallowedTools"}
+LIST_KEYS = {"tools", "disallowedTools"}
 DEFAULT_MODEL = "sonnet"
 DEFAULT_EFFORT = "medium"
 
@@ -60,6 +64,11 @@ def parse(path):
                     meta[k.strip()] = v.strip()
             body = parts[2].lstrip("\n")
     return meta, body.rstrip() + "\n"
+
+
+def as_list(value):
+    """'Read, Grep' or '[Read, "Grep"]' -> ['Read', 'Grep']."""
+    return [t.strip().strip("'\"") for t in value.strip().strip("[]").split(",") if t.strip().strip("'\"")]
 
 
 def amendments_block():
@@ -111,9 +120,9 @@ def collect(directory, rules, amend, former=False):
             "model": DEFAULT_MODEL,
             "effort": DEFAULT_EFFORT,
         }
-        for key in ALLOWED_KEYS - {"description", "maxTurns"}:
+        for key in sorted(ALLOWED_KEYS - {"description", "maxTurns"}):
             if key in meta:
-                entry[key] = meta[key]
+                entry[key] = as_list(meta[key]) if key in LIST_KEYS else meta[key]
         agents[slug] = entry
     return agents
 

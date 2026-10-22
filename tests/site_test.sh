@@ -102,7 +102,15 @@ printf '{"revenue_usd": 0, "spent_usd": 99, "day": 4, "days_left": 26, "app_name
 printf '# Memory\n\n- The build command is tools/xc.sh. Secret: github_pat_11AAAAAAA0000000000000000000000.\n' > .claude/agent-memory/maya/MEMORY.md
 printf '# Privacy policy\n\nWe collect nothing.\n' > site/pages/privacy.md
 python3 tools/governor.py set-day1 2026-11-01 >/dev/null; python3 tools/governor.py set-budget 140 >/dev/null; python3 tools/governor.py set-5h-budget 20 >/dev/null
-python3 -c 'import json; u=json.load(open("ops/usage.json")); u["cats"]={__import__("datetime").date.today().isoformat(): {"project": 9.0, "reports": 0.4, "meetings": 0.3, "hiring": 0.2, "talk": 0.1}}; u["days"]={"2026-11-03": 10.0, __import__("datetime").date.today().isoformat(): 10.0}; json.dump(u, open("ops/usage.json", "w"))'
+python3 -c 'import json; u=json.load(open("ops/usage.json")); u["cats"]={__import__("datetime").date.today().isoformat(): {"project": 9.0, "reports": 0.4, "meetings": 0.3, "hiring": 0.2, "talk": 0.1}}; u["days"]={"2026-11-03": 10.0, __import__("datetime").date.today().isoformat(): 10.0}; u["kinds"]={__import__("datetime").date.today().isoformat(): {"build": 5.0, "research": 3.0, "operations": 1.0}}; json.dump(u, open("ops/usage.json", "w"))'
+# The run loop's last few hours, for the week strip: work, then a 5-hour limit.
+python3 - <<'EOF'
+import datetime as dt, json
+now = dt.datetime.now().astimezone()
+lines = [{"at": (now - dt.timedelta(minutes=15 * i)).isoformat(timespec="seconds"), "run": "queue" if i < 8 else "work",
+          "code": "limit_5h" if i < 8 else "work", "billing": "plan"} for i in range(16, 0, -1)]
+open("ops/ticks.jsonl", "w").write("".join(json.dumps(l) + "\n" for l in lines))
+EOF
 
 echo "== build"
 ok "builds and reports counts" "python3 tools/site_build.py --out $OUT | grep -q 'reports 2, workers 4, events 3, story 3, requests 2'"
@@ -138,6 +146,22 @@ ok "combined log newest first, pipes escaped, json export" "head -20 $OUT/log/in
 ok "usage page has every window" "grep -q 'Last 5 hours' $OUT/usage.md && grep -q 'This week' $OUT/usage.md && grep -q 'Fable this week' $OUT/usage.md"
 ok "usage page lists the hiring category and the 90% floor" "grep -q '| hiring |' $OUT/usage.md && grep -q 'at least 90%' $OUT/usage.md"
 ok "usage is shown in percent, never in dollars" "grep -q 'of the weekly limit' $OUT/usage.md && ! grep -q '[\$]' $OUT/usage.md"
+ok "usage: the plan by now is a marker on the week and today bars, under a status line" "[ \$(grep -o 'class=\"mark plan\"' $OUT/usage.md | wc -l) -ge 2 ] && grep -q 'class=\"status-line' $OUT/usage.md && grep -q 'Plan by now' $OUT/usage.md"
+ok "usage: today's bar shows the evening report's reserve" "grep -q 'class=\"mark reserve\"' $OUT/usage.md"
+ok "usage: product work has its 90% floor marker; overheads show their caps" "grep -q 'class=\"mark floor\"' $OUT/usage.md && grep -q 'of its 3% cap' $OUT/usage.md"
+ok "usage: the kinds of product work as bars" "grep -q 'Product work by kind' $OUT/usage.md && grep -q '>Build<' $OUT/usage.md"
+ok "usage: the week hour by hour, with the hours in each state" "grep -q 'class=\"week-strip\"' $OUT/usage.md && grep -q 'h c-limit_5h' $OUT/usage.md && grep -q 'h c-work' $OUT/usage.md && grep -q 'class=\"legend hours\"' $OUT/usage.md"
+ok "usage: the exact figures fold away" "grep -q '<details markdown=\"1\"><summary>The exact figures' $OUT/usage.md"
+ok "usage: the API credits, when the Investors' switch is on" "grep -q '## API credits' $OUT/usage.md && grep -q 'of the included credits' $OUT/usage.md"
+ok "report strip: the day's usage against a pace marker" "grep -q 'class=\"mark plan\"' $OUT/_posts/2026-11-03-*evening.md"
+
+echo "== feeds"
+ok "reports feed: jekyll-feed, up to 50 posts" "grep -q 'posts_limit: 50' $OUT/_config.yml && grep -q '^extra_feeds: true' $OUT/_config.yml"
+ok "product updates and records feeds are valid Atom" "python3 -c 'import sys, xml.etree.ElementTree as E; [E.parse(p) for p in sys.argv[1:]]' $OUT/feed/updates.xml $OUT/feed/records.xml"
+ok "updates: decisions and tests, not commits; absolute links" "grep -q 'Chose SwiftUI over UIKit' $OUT/feed/updates.xml && grep -q 'Tests green' $OUT/feed/updates.xml && ! grep -q 'First compiling build' $OUT/feed/updates.xml && grep -q 'href=\"https://test.github.io/site/feed/updates.xml\"' $OUT/feed/updates.xml"
+ok "records: the diaries, linked absolutely" "grep -q \"Maya&#x27;s diary\" $OUT/feed/records.xml && grep -q 'https://test.github.io/site/story/2026-11-03-maya-diary.html' $OUT/feed/records.xml"
+ok "every page advertises the feeds" "grep -q 'feed/updates.xml' $OUT/_layouts/default.html && grep -q 'feed/records.xml' $OUT/_layouts/default.html"
+ok "a Subscribe page under About lists the three feeds" "grep -q 'https://test.github.io/site/feed/records.xml' $OUT/subscribe.md && grep -q 'subscribe.html' $OUT/about.md && grep -q 'subscribe.html' $OUT/_layouts/default.html"
 ok "requests page lists open issues, urgent first, with message link" "grep -q 'two-factor' $OUT/requests.md && grep -q 'Questions from Report 12' $OUT/requests.md && grep -n 'two-factor\|Report 12' $OUT/requests.md | head -1 | grep -q two-factor && grep -q 'issues/new?labels=directive' $OUT/requests.md"
 ok "index has the scoreboard and the message link" "grep -q 'net proceeds' $OUT/index.md && grep -q 'Day 4' $OUT/index.md && grep -q 'issues/new' $OUT/index.md"
 ok "pages: written privacy copied, others are placeholders" "grep -q 'We collect nothing' $OUT/privacy.md && grep -q 'published here at launch' $OUT/press.md"

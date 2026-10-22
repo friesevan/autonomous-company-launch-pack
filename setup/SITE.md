@@ -12,20 +12,21 @@ Every page has the section tabs at the top, with the current section marked, and
 | --- | --- | --- |
 | Home | Four tiles (money against the goal with a bar, days left, team morale as a color-coded word, what is waiting on the Investors), then the hero: before launch the pipeline (research → pitch → build → review → launch → selling) with a 30-day track; from launch, net proceeds by day against the $200 line. Then the latest report, the cast with moods, the latest records, and the earlier reports | `ops/scoreboard.json`, `reports/`, `story/`, open issues |
 | Reports | Every report, grouped by day, newest first, on a day timeline; each report a card with its kind (morning, evening, weekly, final), number, time, and opening line | `reports/` |
-| A report | A header naming the kind of report, its number, day, and time, the CEO's byline and portrait, and links back to all reports and to the older and newer report. A progress strip (day track, money bar, that day's Claude usage as a percentage of the daily pace). The report itself, with a link to its private copy on GitHub, beside a timeline of what got done since the last report (business events only). Weekly and final reports add the usage by day; the Final Report adds the month's milestones and the revenue chart. A last line links to the records written in the period | `reports/<date>-<hhmm>.md`, `log/events.jsonl`, `ops/scoreboard.json`, `ops/usage.json` |
+| A report | A header naming the kind of report, its number, day, and time, the CEO's byline and portrait, and links back to all reports and to the older and newer report. A progress strip (day track, money bar, that day's Claude usage as a percentage of the daily pace, with its plan marker). The report itself, with a link to its private copy on GitHub, beside a timeline of what got done since the last report (business events only). Weekly and final reports add the usage by day; the Final Report adds the month's milestones and the revenue chart. A last line links to the records written in the period | `reports/<date>-<hhmm>.md`, `log/events.jsonl`, `ops/scoreboard.json`, `ops/usage.json` |
 | Cast | Every worker, current and former, with an animated portrait, role, and their latest feeling in their own word, color-coded; between them, the candidates interviewed and not hired ("Considered, not hired"), with a link to the hiring rounds | `personnel/registry.json`, `tools/portrait.py`, diaries |
 | A worker | A link back to the cast; animated portrait, their current feeling in their own word with the reason and a sparkline of past moods, profile (role, manager, temperament, hiring round linked to its page, joined, salary in credits, career goal), the mood history, the 200 most recent events they logged, every diary, meeting, interview, and conversation they appear in, and a collapsed "What they remember" with their current memory file | the registry, diaries, `log/events.jsonl`, `story/`, `.claude/agent-memory/<name>/MEMORY.md` |
 | Records | The story. This week's mood line for each worker; the hiring rounds as cards (role, day, every candidate's portrait with the hire marked, the outcome); then every diary, meeting, conversation, and testimony grouped by day, newest first, each with its kind, its workers' portraits, and a diary's feeling | `story/**/*.md`, the registry |
 | A hiring round | A link back to the records; the round's steps (brief, slate, interviews, decision, hire), each linked to its record; every candidate with portrait, status (hired or on the bench), and scorecard average from each interviewer; the round's records in order | `story/hiring/<round>/`, the registry |
 | A record | One diary entry, meeting record, conversation, interview, memo, or testimony, with a link back to the records or to its hiring round, its kind, day, and time, and its workers with portraits (an interview links the interviewer and the candidate); a diary shows its feeling and reason | `story/**/*.md` |
 | Log | The combined event log, newest first, grouped by day, 500 rows, with the whole log as JSON | `log/events.jsonl` |
-| Usage | Progress bars for the last 5 hours, today, the week, and Fable, each as a percentage of its limit; a stacked bar of the 7-day shares by category against the caps; past weeks as bars; the figures below. Usage is never shown in dollars: the plan's limits are percentages | `tools/governor.py status --json` and `report-usage` |
+| Usage | A progress bar for every percentage. The last 5 hours, today, the week, and Fable, each against its limit, with a marker for what an even pace would have used by now and a line saying whether the company is ahead or behind, in percentage points, and why; product work against its 90% floor marker; each overhead category against its cap marker; the kinds of product work; the split by model; past weeks; the API credits used this month. The exact figures sit in a collapsed details block. Usage is never shown in dollars: the plan's limits are percentages | `tools/governor.py status --json` and `report-usage`; the reasons from `ops/ticks.jsonl` |
 | Requests | Every open emergency, urgent request, report (a report's private copy with its questions), and pitch, most urgent first, each linking to its GitHub issue; and a "Message the company" link | `gh issue list` on the company repository |
 | About, Privacy, Support, Press kit | Pages the company writes (Apple requires privacy and support; the press kit is for the launch), under the About tab with their own tabs; the Investors' pages join them | `site/pages/*.md`, `investors/site/pages/*.md` |
 | Page not found | A 404 page with a link home | the generator |
-| RSS | A feed of the reports, so readers and the Investors can follow without checking | Jekyll's feed plugin |
+| Feeds | Three feeds, built without Claude at every rebuild, so readers and the Investors can follow without checking: `feed.xml`, the 50 newest reports; `feed/updates.xml`, product updates (business events from the log, such as builds, tests, TestFlight, the App Store, sales, decisions, and hires); and `feed/records.xml`, the records (diaries, conversations, hiring rounds, testimonies). Links in the feeds are absolute, from `site.json`'s `url` | Jekyll's feed plugin for the reports; the generator for the other two |
+| Subscribe | Under the About tab: the three feeds and how to get notified | the generator |
 
-Every page carries the disclosure (Commandment 44), the Investors' announcement when there is one, and Open Graph tags so a shared link shows the page's title and description. Every bar, chart, and portrait is inline SVG drawn by the generator; no JavaScript, no images from outside, nothing from a generative model. The design is deliberately plain so it can be restyled under creative approval (Commandment 51): one layout file and one stylesheet, both inside the generator, plus the Investors' own styles.
+Every page carries the disclosure (Commandment 44), the Investors' announcement when there is one, Open Graph tags so a shared link shows the page's title and description, and discovery tags for the three feeds. Every bar, chart, and portrait is inline SVG drawn by the generator; no JavaScript, no images from outside, nothing from a generative model. The design is deliberately plain so it can be restyled under creative approval (Commandment 51): one layout file and one stylesheet, both inside the generator, plus the Investors' own styles.
 
 ## Portraits and moods
 
@@ -44,7 +45,7 @@ Every item a report holds (Commandments 39, 47, 48) has a shape, and the generat
 | What got done | a sequence of events | the timeline beside the report: every business event since the last report, oldest first, colored by type |
 | Team | state changes | hires and departures on the timeline, as facts; the people themselves are on the cast page |
 | Human help | events of type message | on the timeline, tagged |
-| Usage | a percentage per window | the strip's usage bar; on weekly and final reports, bars by day against the daily pace |
+| Usage | a percentage per window | the strip's usage bar with its plan marker; on weekly and final reports, bars by day against the daily pace |
 | Next up, corrections | prose | prose |
 | Week in review | a week of quantities | 7-day usage bars; the week's moods are in the records |
 | The Final Report | the whole month | the milestones of the month as a timeline, the revenue chart, and 30-day usage; the testimonies are in the records |
@@ -52,18 +53,18 @@ Every item a report holds (Commandments 39, 47, 48) has a shape, and the generat
 ## Why these pages help the Mission
 
 - **The scoreboard and the reports** answer "how is the business doing?" in one glance and then in the CEO's own words.
-- **The records and the cast** are the story, and the story is the marketing (Review tab): a reader follows a character, which is what keeps people coming back. The log lets the Investors audit the reports against the record (Commandment 60.10) without opening the repository.
+- **The records and the cast** are the story, which gives readers a reason to come back. The log lets the Investors audit the reports against the record (Commandment 60.10) without opening the repository.
 - **Usage** makes the experiment's cost part of the public record, and lets the Investors see the pace without a terminal.
 - **Requests** is the Investors' to-do list, readable on a phone, with one tap to the issue where they answer.
 - **Press kit and support** are needed at launch anyway (Commandments 10 and 6); building them into the site from Day 1 means nothing is improvised on launch day.
-- **RSS** turns one-time visitors into followers at no cost.
+- **The feeds** turn one-time visitors into followers at no cost, and let the Investors follow product updates without checking.
 
 ## How it stays cheap
 
 - **No Claude for the site.** The generator is plain Python with no dependencies. It reads files, writes Markdown and one HTML layout, and GitHub builds the HTML. A rebuild takes about a second on the Mac mini.
 - **One facts file per report.** Before every report session, `tools/report_facts.py` gathers, without Claude, everything the report needs into `ops/report_facts.md`, so the session reads one file instead of searching the repository, and the CEO writes 300 to 700 words of plain update. The site draws the scoreboard, the timeline, and the usage, so the report never repeats them.
 - **Live without being expensive.** The supervisor runs `tools/site_publish.sh` at the end of every tick that did anything: build, commit, and push while publishing is on. GitHub Pages then publishes within a minute or two. A diary written at 3 p.m. is on the site by about 3:20 p.m.; the twice-daily reports sit alongside, and nothing waits for a report.
-- **Nothing is generated twice.** Diaries, meeting records, and events are written once, for the company's own purposes, and the site shows them as they are. The only extra work the company does for the site is keeping a few small files current: `site.json` once, `personnel/registry.json` when the cast changes, `ops/scoreboard.json` with each report, and the four pages.
+- **Nothing is generated twice.** Diaries, meeting records, and events are written once, for the company's own purposes, and the site shows them as they are. The only extra work the company does for the site is keeping a few small files current: `site.json` once, and its `name` again after the Pitch, `personnel/registry.json` when the cast changes, `ops/scoreboard.json` with each report, and the four pages.
 
 ## The data contract
 
@@ -71,9 +72,9 @@ The generator reads these shapes and nothing else. The Handbook may add fields b
 
 ```
 site.json                  {"name", "tagline", "company_repo": "org/company", "url", "publish_memory": true}
-                           url is the site's address; its path (for example /site) becomes Jekyll's baseurl
+                           url is the site's address; its path (for example /site) becomes Jekyll's baseurl, and the feeds use it for absolute links
 reports/<date>-<hhmm>.md   the public report, without its questions; front matter: title, number, day,
-                           date (YYYY-MM-DD), time (HH:MM), kind (morning|evening|weekly|final), author, issue (URL)
+                           date (YYYY-MM-DD), time (HH:MM), kind (morning|evening|weekly|final), author, revenue_usd, issue (URL)
 story/**/*.md              front matter: title, date, time, kind (diary|meeting|chat|interview|memo|testimony), workers (comma list);
                            a diary adds feeling (one word), mood (1-5), and mood_reason (one line)
 personnel/registry.json    [{"name", "role", "manager", "status": "active|candidate|former", "salary", "career_goal",
@@ -117,7 +118,7 @@ If a true in-page form is ever wanted, the cheapest honest route is a small serv
 
 ## Setup (Investors, before Day 1)
 
-1. In the company's GitHub organization, create an empty public repository named `<org>.github.io`, and set **Settings > Pages** to deploy from the `main` branch, root folder. The site's address is then `https://<org>.github.io`. A repository named `site` also works, at `https://<org>.github.io/site`. GitHub Pages is free only for public repositories, which is why the site has its own repository instead of living in the private `company` repository.
+1. In the company's GitHub organization, create a public repository named `<org>.github.io` with a README, so its `main` branch exists, and set **Settings > Pages** to deploy from the `main` branch, root folder. The site's address is then `https://<org>.github.io`. A repository named `site` also works, at `https://<org>.github.io/site`. GitHub Pages is free only for public repositories, which is why the site has its own repository instead of living in the private `company` repository.
 2. Give the company's machine user write access to it (its token covers both repositories; Setup Guide, section 4).
 3. On Day 1 the company clones it beside `company` (as `../site`), fills `site.json` with the address, and builds the site. The first report asks you to approve the page and the portrait style (Commandment 46). When you have, set `"publish": true` in `investors/site/settings.json`; the site is live within about 15 minutes.
 
